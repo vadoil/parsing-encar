@@ -1,0 +1,3 @@
+# Run encar parser daily at 03:00 (Korea time, UTC+9 → 18:00 UTC)
+# Adjust timezone of the host if needed
+0 3 * * * cd /app && uv run --no-sync python -m encar_parser run >> /var/log/encar.log 2>&1
