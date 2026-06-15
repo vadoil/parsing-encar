@@ -1,0 +1,31 @@
+models:
+  - slug: bmw-x5-g05
+    name: "BMW X5 (G05)"
+    enabled: true
+    priority: 10
+    manufacturer: BMW
+    model_group: X5
+    model: "X5 (G05)"
+    year_from: 2018
+    year_to: 2025
+    sort: ModifiedDate
+
+  - slug: kia-sportage-nq5
+    name: "Kia Sportage (NQ5)"
+    enabled: true
+    priority: 20
+    manufacturer: Kia
+    model_group: Sportage
+    model: "Sportage (NQ5)"
+    year_from: 2022
+    fuel: hybrid
+
+  - slug: hyundai-sonata-dn8
+    name: "Hyundai Sonata (DN8)"
+    enabled: true
+    priority: 30
+    manufacturer: Hyundai
+    model_group: Sonata
+    model: "Sonata (DN8)"
+    year_from: 2019
+    year_to: 2023
