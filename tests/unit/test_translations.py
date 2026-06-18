@@ -1,10 +1,10 @@
 import pytest
 
 from encar_parser.translations import (
-    translate_fuel,
-    translate_transmission,
     translate_color,
+    translate_fuel,
     translate_import_type,
+    translate_transmission,
 )
 
 

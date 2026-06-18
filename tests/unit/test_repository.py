@@ -1,13 +1,12 @@
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from encar_parser.db.models import Base, Car, CarModelMatch, SearchModel
+from encar_parser.db.models import Base, Car, CarModelMatch
 from encar_parser.db.repository import (
-    Repository,
+    get_enabled_models,
+    link_car_to_model,
     upsert_car,
     upsert_search_model,
-    link_car_to_model,
-    get_enabled_models,
 )
 
 
@@ -86,7 +85,7 @@ async def test_link_car_to_model_idempotent(session):
     await upsert_car(session, encar_id=1, brand="B", model="M")
     await link_car_to_model(session, search_model_id=sm.id, encar_id=1)
     await link_car_to_model(session, search_model_id=sm.id, encar_id=1)  # second time
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
     result = await session.execute(
         select(func.count()).select_from(CarModelMatch)
     )

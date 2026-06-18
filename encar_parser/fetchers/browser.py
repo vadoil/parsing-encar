@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import random
 
-from playwright.async_api import async_playwright, Browser, BrowserContext
+from playwright.async_api import Browser, BrowserContext, async_playwright
 
 from encar_parser.config import get_settings
-from encar_parser.fetchers.base import Fetcher, FetcherError, FetcherResponse
+from encar_parser.fetchers.base import FetcherError, FetcherResponse
 from encar_parser.utils.ua import USER_AGENTS
 
 
@@ -20,9 +20,9 @@ class BrowserFetcher:
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
 
-    async def __aenter__(self) -> "BrowserFetcher":
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
+    async def __aenter__(self) -> BrowserFetcher:
+        self._playwright = await async_playwright().start()  # type: ignore[assignment]
+        self._browser = await self._playwright.chromium.launch(  # type: ignore[union-attr,attr-defined]
             headless=self._settings.headless_browser,
         )
         self._context = await self._browser.new_context(

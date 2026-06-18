@@ -1,15 +1,15 @@
 import pytest
 
+from encar_parser.fetchers.api import ApiFetcher
 from encar_parser.fetchers.base import FetcherError
 from encar_parser.fetchers.factory import FallbackFetcher
-from encar_parser.fetchers.api import ApiFetcher
 
 
 @pytest.mark.asyncio
 async def test_fallback_uses_api_on_success():
     """When ApiFetcher returns 200, no fallback to browser."""
-    primary = ApiFetcher()
-    secondary = ApiFetcher()  # will not be called
+    ApiFetcher()
+    ApiFetcher()  # will not be called
 
     call_count = {"primary": 0, "secondary": 0}
 

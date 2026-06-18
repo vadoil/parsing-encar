@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -61,7 +61,7 @@ async def upsert_car(
     cars where last_seen_at < (today - N days) to find listings that are no
     longer being returned by encar.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     existing = await session.scalar(select(Car).where(Car.encar_id == encar_id))
     if existing is None:
         car = Car(
@@ -94,7 +94,7 @@ async def link_car_to_model(
             CarModelMatch.encar_id == encar_id,
         )
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if existing is None:
         session.add(
             CarModelMatch(

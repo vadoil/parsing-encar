@@ -1,14 +1,12 @@
 from datetime import date
 
-import pytest
-
-from encar_parser.encar_url import ModelConfig
 from encar_parser.db.models import SearchModel
+from encar_parser.encar_url import ModelConfig
 from encar_parser.scheduler import models_for_today
 
 
 def _mk(slug: str, priority: int = 100) -> SearchModel:
-    cfg = ModelConfig(slug=slug, name=slug, priority=priority)
+    ModelConfig(slug=slug, name=slug, priority=priority)
     return SearchModel(
         slug=slug, name=slug, encar_url="", encar_action={}, priority=priority
     )

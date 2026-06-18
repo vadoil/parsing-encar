@@ -1,10 +1,7 @@
-import pytest
-import json
 from datetime import date
 
-from encar_parser.parsers.list_page import parse_search_list, SearchListItem
 from encar_parser.parsers.details import parse_car_detail
-
+from encar_parser.parsers.list_page import parse_search_list
 
 # ---- list parser ----
 

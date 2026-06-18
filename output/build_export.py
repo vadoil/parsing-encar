@@ -54,8 +54,7 @@ def normalize_photo(p: str) -> str:
     local = PHOTOS_DIR / Path(p).name
     # path doesn't include carid directory — find it
     for carid_dir in PHOTOS_DIR.glob("*/" + Path(p).name):
-        rel = carid_dir.relative_to(HERE).as_posix()
-        return rel
+        return carid_dir.relative_to(HERE).as_posix()
     if local.exists():
         return local.relative_to(HERE).as_posix()
     return f"{IMG_BASE}{p}"
@@ -72,9 +71,9 @@ def build_csv(sample: list[dict], details: dict[str, dict]) -> None:
     for lst in sample:
         carid = int(lst["Id"])
         det = details.get(str(carid), {})
-        cat = det.get("category", {})
+        det.get("category", {})
         spec = det.get("spec", {})
-        adv = det.get("advertisement", {})
+        det.get("advertisement", {})
         condition = det.get("condition", {})
 
         photos_remote = det.get("photos", []) or []
@@ -185,10 +184,10 @@ def build_html(sample: list[dict], details: dict[str, dict]) -> None:
     for lst in sample:
         carid = int(lst["Id"])
         det = details.get(str(carid), {})
-        cat = det.get("category", {})
+        det.get("category", {})
         spec = det.get("spec", {})
-        adv = det.get("advertisement", {})
-        condition = det.get("condition", {})
+        det.get("advertisement", {})
+        det.get("condition", {})
 
         photos_remote = det.get("photos", []) or []
         paths: list[str] = []

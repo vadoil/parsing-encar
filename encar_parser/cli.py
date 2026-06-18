@@ -131,7 +131,7 @@ async def _run_async() -> None:
                         sm,
                         fetcher=fetcher,
                         session=session,
-                        list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # noqa: E501
+                        list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # type: ignore[misc]  # noqa: E501
                         detail_url_template=settings.api_detail_template,
                         request_delay=request_delay,
                         max_pages=settings.max_pages,

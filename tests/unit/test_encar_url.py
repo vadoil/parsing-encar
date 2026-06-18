@@ -101,6 +101,7 @@ def test_build_list_api_url():
 def test_build_action_reference_payload():
     cfg = ModelConfig(slug="x", name="x", manufacturer="BMW", model_group="X5")
     action = build_action(cfg)
-    assert "q" in action and "sr" in action
+    assert "q" in action
+    assert "sr" in action
     assert action["api_url"].startswith("https://api.encar.com/")
     assert action["frontend_url"].startswith("https://www.encar.com/")

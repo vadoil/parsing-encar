@@ -1,9 +1,8 @@
-import asyncio
 import time
 
 import pytest
 
-from encar_parser.utils.rate_limit import TokenBucket, RandomDelay
+from encar_parser.utils.rate_limit import RandomDelay, TokenBucket
 
 
 @pytest.mark.asyncio

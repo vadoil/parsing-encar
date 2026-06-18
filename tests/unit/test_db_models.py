@@ -1,7 +1,7 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from encar_parser.db.models import Car, CarModelMatch, Run, SearchModel
+from encar_parser.db.models import Car, CarModelMatch, SearchModel
 
 
 @pytest.mark.asyncio

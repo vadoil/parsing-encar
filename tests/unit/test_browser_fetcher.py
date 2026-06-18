@@ -1,7 +1,5 @@
 import pytest
 
-from encar_parser.fetchers.base import FetcherError
-
 
 @pytest.mark.asyncio
 @pytest.mark.live
