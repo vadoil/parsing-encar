@@ -122,32 +122,56 @@ async def _run_async() -> None:
         await session.commit()
         await session.refresh(run_record)
 
-        async with ApiFetcher() as api, BrowserFetcher() as browser:
-            fetcher = FallbackFetcher(primary=api, secondary=browser)
+        async with ApiFetcher() as api:
+            # BrowserFetcher is the fallback when ApiFetcher hits a 403/429.
+            # Construct it lazily — if Playwright or Chromium isn't installed,
+            # the run should still complete (with API-only fetches), not die
+            # in the `async with` line.
+            browser: BrowserFetcher | None = None
+            try:
+                browser = BrowserFetcher()
+                await browser.__aenter__()
+            except Exception as e:
+                log.warning(
+                    "browser_fetcher_unavailable",
+                    error=str(e),
+                    hint="run `playwright install chromium --with-deps` to enable fallback",
+                )
+                browser = None
+
+            if browser is not None:
+                fetcher: Fetcher = FallbackFetcher(primary=api, secondary=browser)
+            else:
+                fetcher = api  # type: ignore[assignment]
             request_delay = RandomDelay(settings.min_delay_sec, settings.max_delay_sec)
-            for sm in today_models:
-                try:
-                    count = await run_model(
-                        sm,
-                        fetcher=fetcher,
-                        session=session,
-                        list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # type: ignore[misc]  # noqa: E501
-                        detail_url_template=settings.api_detail_template,
-                        request_delay=request_delay,
-                        max_pages=settings.max_pages,
-                    )
-                    run_record.models_done += 1
-                    run_record.cars_fetched += count
-                except Exception as e:
-                    run_record.cars_failed += 1
-                    log.error("model_failed", slug=sm.slug, error=str(e))
-                    if run_record.error_log is None:
-                        run_record.error_log = []
-                    run_record.error_log.append({"slug": sm.slug, "error": str(e)})
-                # Pause between models
-                await asyncio.sleep(random.uniform(
-                    settings.min_model_delay_sec, settings.max_model_delay_sec
-                ))
+
+            try:
+                for sm in today_models:
+                    try:
+                        count = await run_model(
+                            sm,
+                            fetcher=fetcher,
+                            session=session,
+                            list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # type: ignore[misc]  # noqa: E501
+                            detail_url_template=settings.api_detail_template,
+                            request_delay=request_delay,
+                            max_pages=settings.max_pages,
+                        )
+                        run_record.models_done += 1
+                        run_record.cars_fetched += count
+                    except Exception as e:
+                        run_record.cars_failed += 1
+                        log.error("model_failed", slug=sm.slug, error=str(e))
+                        if run_record.error_log is None:
+                            run_record.error_log = []
+                        run_record.error_log.append({"slug": sm.slug, "error": str(e)})
+                    # Pause between models
+                    await asyncio.sleep(random.uniform(
+                        settings.min_model_delay_sec, settings.max_model_delay_sec
+                    ))
+            finally:
+                if browser is not None:
+                    await browser.__aexit__(None, None, None)
 
         run_record.finished_at = datetime.now(UTC)
         await session.commit()

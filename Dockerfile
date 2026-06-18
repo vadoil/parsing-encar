@@ -18,6 +18,12 @@ RUN pip install uv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# Install Playwright browsers. The library is in pyproject deps; without
+# the browser binary the BrowserFetcher fallback can't launch Chromium and
+# the whole run dies inside the `async with BrowserFetcher() as browser:` line.
+# Use --with-deps so the OS-level libs (libnss, libatk, etc) are also installed.
+RUN uv run --no-sync playwright install chromium --with-deps
+
 COPY encar_parser ./encar_parser
 COPY alembic ./alembic
 COPY alembic.ini ./
