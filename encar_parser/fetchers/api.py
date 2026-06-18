@@ -5,14 +5,37 @@ from __future__ import annotations
 import random
 
 import httpx
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 from encar_parser.config import get_settings
-from encar_parser.fetchers.base import Fetcher, FetcherError, FetcherResponse
+from encar_parser.fetchers.base import FetcherError, FetcherResponse
 from encar_parser.utils.ua import USER_AGENTS
 
 
+class RetryableError(FetcherError):
+    """Subclass of FetcherError that signals 'worth retrying'.
+
+    Tenacity is configured to retry ONLY this class. A bare FetcherError
+    (e.g. 403 bot block, 4xx logic error) propagates immediately so the
+    FallbackFetcher can switch to the browser without delay.
+    """
+
+
 class ApiFetcher:
-    """Fetches URLs via httpx with rotation of User-Agent and retry-safe headers."""
+    """Fetches URLs via httpx with rotation of User-Agent and tenacity-backed retries.
+
+    Retry policy (from Settings):
+      - 429 (rate limit), 5xx (server error), httpx.TimeoutException → retry
+        up to ``retry_max_attempts`` times with exponential backoff + jitter
+        (``retry_min_wait_sec`` to ``retry_max_wait_sec`` seconds).
+      - 403 (bot block) and other 4xx → no retry, raise FetcherError so
+        FallbackFetcher can switch to Playwright.
+    """
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -20,7 +43,7 @@ class ApiFetcher:
         self._client: httpx.AsyncClient | None = None
         self._ua_pool = list(USER_AGENTS)
 
-    async def __aenter__(self) -> "ApiFetcher":
+    async def __aenter__(self) -> ApiFetcher:
         timeout = httpx.Timeout(self._settings.request_timeout_sec)
         self._client = httpx.AsyncClient(
             timeout=timeout,
@@ -57,20 +80,65 @@ class ApiFetcher:
         if referer:
             headers["Referer"] = referer
 
+        # Build a tenacity retry controller. We construct it (instead of using
+        # the @retry decorator) so tests can pass a controller with zero wait.
+        controller = AsyncRetrying(
+            stop=stop_after_attempt(self._settings.retry_max_attempts),
+            wait=wait_random_exponential(
+                multiplier=1,
+                min=self._settings.retry_min_wait_sec,
+                max=self._settings.retry_max_wait_sec,
+            ),
+            retry=retry_if_exception_type(RetryableError),
+            reraise=True,
+        )
+
+        try:
+            async for attempt in controller:
+                with attempt:
+                    return await self._do_get(url, params, headers)
+        except RetryableError as e:
+            # Exhausted retries — surface as a regular FetcherError so
+            # FallbackFetcher can decide what to do (typically: switch to
+            # browser, or bubble up if browser is also configured to error).
+            raise FetcherError(
+                f"Retries exhausted: {e}",
+                url=url,
+                status=e.status,
+            ) from e
+        # Unreachable: controller.reraise=True + the inner return path means
+        # either we returned or an exception was re-raised.
+        raise RuntimeError("ApiFetcher.get: control flow invariant broken")
+
+    async def _do_get(
+        self, url: str, params: dict | None, headers: dict
+    ) -> FetcherResponse:
+        """Single attempt. Raises RetryableError or FetcherError."""
+        assert self._client is not None
         try:
             resp = await self._client.get(url, params=params, headers=headers)
         except httpx.TimeoutException as e:
-            raise FetcherError(f"Timeout: {e}", url=url) from e
+            raise RetryableError(f"Timeout: {e}", url=url) from e
         except httpx.HTTPError as e:
-            raise FetcherError(f"HTTP error: {e}", url=url) from e
+            # Network-level errors (connection reset, DNS, etc) — retry.
+            raise RetryableError(f"HTTP error: {e}", url=url) from e
 
-        if resp.status_code in (403, 429):
+        if resp.status_code == 403:
+            # Bot block — no retry. FallbackFetcher will switch to Playwright.
             raise FetcherError(
                 f"Blocked: {resp.status_code}",
                 url=url,
                 status=resp.status_code,
             )
+        if resp.status_code == 429 or resp.status_code >= 500:
+            # Rate-limited or server error — retry.
+            raise RetryableError(
+                f"Retryable HTTP {resp.status_code}",
+                url=url,
+                status=resp.status_code,
+            )
         if resp.status_code >= 400:
+            # Other 4xx — no retry, this is a real error.
             raise FetcherError(
                 f"HTTP {resp.status_code}",
                 url=url,

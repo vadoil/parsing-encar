@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     rate_limit_per_hour: int = 1200
     request_timeout_sec: int = 30
     retry_max_attempts: int = 3
+    retry_min_wait_sec: float = 5.0
+    retry_max_wait_sec: float = 60.0
     headless_browser: bool = True
 
     min_delay_sec: float = 2.0
