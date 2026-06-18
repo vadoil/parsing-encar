@@ -82,29 +82,53 @@ def _cell(field: str, value: str) -> str:
 
 
 def build_q(cfg: ModelConfig) -> str:
-    """Build the nested S-expression `q` filter for the encar API.
+    """Build the S-expression `q` filter for the encar API.
 
     Produces e.g.:
-        (And.(C.CarType.Y._.(C.Manufacturer.BMW._.(C.ModelGroup.X5._.Model.X5 (G05).))))
+        (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.ModelGroup.X5.))._.Year.range(201800..202699).)
+
+    Structure (verified against the real API via DevTools):
+      (And.
+        Hidden.N._.                                   # fixed prefix
+        (C.CarType.<code>._.(C.Manufacturer.<m>._.ModelGroup.<g>.))  # CarType cell
+        ._.Year.range(YYYYMM..YYYYMM)                 # optional year range
+      .)
+
+    The `model` field on the config is metadata only — encar's search expression
+    stops at ModelGroup level. The model name is stored on the Car record but
+    does not appear in `q` (use a raw_q if you need finer granularity).
     """
     if cfg.raw_q:
         return cfg.raw_q
 
-    cells: list[str] = [_cell("CarType", cfg.car_type_code)]
+    # Cells from shallowest to deepest. The deepest becomes the body (bare, no
+    # C. prefix); everything above is a wrapper (with C. prefix).
+    fields: list[tuple[str, str]] = []
     if cfg.manufacturer:
-        cells.append(_cell("Manufacturer", cfg.manufacturer))
+        fields.append(("Manufacturer", cfg.manufacturer))
     if cfg.model_group:
-        cells.append(_cell("ModelGroup", cfg.model_group))
-    if cfg.model:
-        # The deepest level uses the bare field name (no leading C.) in encar's
-        # format, e.g. ..._.Model.X5 (G05).
-        cells.append(f"Model.{cfg.model}")
+        fields.append(("ModelGroup", cfg.model_group))
 
-    # Nest the cells: (A._.(B._.(C._.D)))
-    expr = cells[-1]
-    for cell in reversed(cells[:-1]):
-        expr = f"{cell}._.({expr})"
-    return f"(And.({expr}.))"
+    if fields:
+        last_field, last_val = fields[-1]
+        body = f"{last_field}.{last_val}."
+        # Wrap with each preceding field. Wrapper is `C.Field.Val._.`, body is
+        # the trailing `Field.Val.` (bare, no parens).
+        expr = body
+        for field, val in reversed(fields[:-1]):
+            expr = f"C.{field}.{val}._.{expr}"
+        car_type_cell = f"(C.CarType.{cfg.car_type_code}._.({expr}))"
+    else:
+        # No manufacturer or model_group — degenerate CarType cell.
+        car_type_cell = f"(C.CarType.{cfg.car_type_code}._.)"
+
+    # Optional year range: encar uses 6-digit YYYYMM (201800 = Jan 2018).
+    # The connector after a closing paren is `_.` (no leading dot).
+    year_range = ""
+    if cfg.year_from is not None and cfg.year_to is not None:
+        year_range = f"_.Year.range({cfg.year_from * 100:06d}..{cfg.year_to * 100 + 99:06d})"
+
+    return f"(And.Hidden.N._.{car_type_cell}{year_range}.)"
 
 
 def build_sr(cfg: ModelConfig, *, page: int = 1) -> str:
