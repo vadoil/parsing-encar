@@ -53,17 +53,31 @@ async def upsert_car(
     model: str,
     **fields: Any,
 ) -> Car:
-    """Create or update a Car. Pass any column name as a kwarg."""
+    """Create or update a Car. Pass any column name as a kwarg.
+
+    On BOTH insert and update, ``last_seen_at`` is set to now(). This is what
+    makes the "sold" detection work: a car that disappears from the API will
+    keep its last_seen_at from the last successful run; we can then query for
+    cars where last_seen_at < (today - N days) to find listings that are no
+    longer being returned by encar.
+    """
+    now = datetime.now(timezone.utc)
     existing = await session.scalar(select(Car).where(Car.encar_id == encar_id))
     if existing is None:
-        car = Car(encar_id=encar_id, brand=brand, model=model, **fields)
+        car = Car(
+            encar_id=encar_id,
+            brand=brand,
+            model=model,
+            last_seen_at=now,
+            **fields,
+        )
         session.add(car)
     else:
         existing.brand = brand
         existing.model = model
         for key, value in fields.items():
             setattr(existing, key, value)
-        existing.last_seen_at = datetime.now(timezone.utc)
+        existing.last_seen_at = now
         car = existing
     await session.commit()
     await session.refresh(car)

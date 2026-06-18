@@ -46,6 +46,8 @@ async def test_upsert_search_model_updates(session):
 async def test_upsert_car_creates(session):
     car = await upsert_car(session, encar_id=42131435, brand="BMW", model="X5 (G05)")
     assert car.encar_id == 42131435
+    # last_seen_at must be set on insert (not just left to first_seen_at).
+    assert car.last_seen_at is not None
 
 
 @pytest.mark.asyncio
@@ -54,6 +56,28 @@ async def test_upsert_car_updates_existing(session):
     car = await upsert_car(session, encar_id=1, brand="BMW", model="X5 (G05)", price_krw=100000)
     assert car.model == "X5 (G05)"
     assert car.price_krw == 100000
+
+
+@pytest.mark.asyncio
+async def test_upsert_car_updates_last_seen_at_on_each_call(session):
+    """The whole point of last_seen_at: detect sold cars.
+
+    Cars that disappear from the API will keep their old last_seen_at; the
+    difference between 'seen in last run' and 'seen N days ago' lets us
+    surface listings that have been quietly delisted.
+    """
+    import asyncio
+    await upsert_car(session, encar_id=42, brand="BMW", model="X5 (G05)")
+    first = (await session.get(Car, 42)).last_seen_at
+    assert first is not None
+
+    # Sleep a hair so datetime.now() ticks.
+    await asyncio.sleep(0.01)
+
+    await upsert_car(session, encar_id=42, brand="BMW", model="X5 (G05)")
+    second = (await session.get(Car, 42)).last_seen_at
+    assert second is not None
+    assert second > first, f"last_seen_at should advance on update; first={first} second={second}"
 
 
 @pytest.mark.asyncio
