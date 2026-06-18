@@ -223,3 +223,39 @@ top-level ключи ответа.
 - `uv run pytest -m "not live"`: **125 passed, 2 deselected** (+3 новых).
 - `uv run ruff check .`: 46 ошибок (без изменений от baseline до Фазы 1).
 - `uv run mypy encar_parser/`: 6 ошибок (без изменений от baseline).
+
+## Тестовый прогон 2026-06-18 — 100 машин, 5 моделей
+
+**Цель:** перед Фазой 2 проверить, что Phase 0/1 (поле `accident_report_available`,
+новая миграция 0002) корректно работают на «свежих» данных, не только на
+ground-truth из `output/_details.json`.
+
+**Запуск:** `uv run python scripts/test_parse_5_models.py` (после `sync`
+в локальный docker postgres). Параметры: `MAX_PAGES=1`, ~20 машин/модель.
+
+### Результат
+- **100 машин за 458 секунд** (≈4.6 сек/машина с rate-limit задержками),
+  **0 ошибок**.
+- 5 моделей × 20 машин = 100 (по 1 странице каждая):
+  - Hyundai Avante (CN7), Genesis G80, Audi A6 (C8), BMW X5 (G05), Hyundai Palisade
+- Все 100 машин заполнены полностью: `displacement_cc`, `body_type`, `color_ru`,
+  `price_krw`, `photo_urls`, `accident_report_available`, `raw_data`.
+- `accident_report_available=True` для 100/100 (сходится с 96.7% в BMW X5 sample
+  из Phase 0 — на новой выборке ratio ещё выше, похоже это системный bias
+  encar, см. Phase 0 finding).
+- **Найден реальный cross-listing дубль** для Фазы 5: cars `42124439` и
+  `42137295` — Audi A6 (C8), `year=2023-09`, `mileage=24 048`,
+  `price=48 800 000`. Разные `encar_id`, но всё остальное идентично — это
+  именно та дубликат-ситуация, под которую проектируется Фаза 5.
+
+### Файлы
+- `scripts/test_parse_5_models.py` (новый) — one-off скрипт, 5 моделей × 1 страница.
+  Не CLI-команда (CLI `run` использует 3-дневную ротацию — не подходит для
+  targeted-теста). Скрипт переиспользуем: можно повторять для приёмочной
+  проверки после Фаз 2-6.
+
+### Замечания
+- Alembic 0002 первая попытка упала на `UPDATE cars SET accident_records = TRUE` —
+  PostgreSQL строг к boolean/int cast. Фикс: добавил `_new` колонку, скопировал
+  с приведением, дропнул старую. **Amendment Phase 1** (тот же коммит,
+  `9163094`).
