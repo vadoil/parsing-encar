@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     min_model_delay_sec: float = 5.0
     max_model_delay_sec: float = 15.0
 
+    # Pagination safety: how many list pages to fetch per model before giving up.
+    # encar caps search results at ~1000 cars; beyond that the API returns empty.
+    max_pages: int = 10
+    page_size: int = 20
+
 
 _settings: Settings | None = None
 

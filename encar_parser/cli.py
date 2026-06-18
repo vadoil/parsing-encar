@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +20,10 @@ from encar_parser.db.repository import (
     upsert_search_model,
 )
 from encar_parser.db.session import get_sessionmaker
-from encar_parser.encar_url import build_url
 from encar_parser.fetchers.api import ApiFetcher
 from encar_parser.fetchers.browser import BrowserFetcher
 from encar_parser.fetchers.factory import FallbackFetcher
-from encar_parser.pipeline import run_model
+from encar_parser.pipeline import make_list_url_for_page, run_model
 from encar_parser.scheduler import models_for_today
 from encar_parser.utils.log import get_logger, setup_logging
 from encar_parser.utils.rate_limit import RandomDelay
@@ -81,7 +80,8 @@ async def _sync_async(config_path: Path) -> None:
 
 def build_url_from_item(item: dict[str, Any]) -> dict[str, Any]:
     """Convert a YAML model item to the fields needed for upsert."""
-    from encar_parser.encar_url import ModelConfig, build_action, build_url as _build_url
+    from encar_parser.encar_url import ModelConfig, build_action
+    from encar_parser.encar_url import build_url as _build_url
     cfg = ModelConfig(**{k: v for k, v in item.items() if k != "enabled"})
     return {
         "slug": item["slug"],
@@ -105,13 +105,13 @@ async def _run_async() -> None:
     Session = get_sessionmaker()
     async with Session() as session:
         all_models = await get_enabled_models(session)
-        today_models = models_for_today(all_models, datetime.now(timezone.utc).date())
+        today_models = models_for_today(all_models, datetime.now(UTC).date())
         if not today_models:
             typer.echo("No models scheduled for today.")
             return
 
         run_record = Run(
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
             models_planned=len(today_models),
             models_done=0,
             cars_fetched=0,
@@ -131,9 +131,10 @@ async def _run_async() -> None:
                         sm,
                         fetcher=fetcher,
                         session=session,
-                        list_url=sm.encar_url,  # now the real api.encar.com list URL
+                        list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # noqa: E501
                         detail_url_template=settings.api_detail_template,
                         request_delay=request_delay,
+                        max_pages=settings.max_pages,
                     )
                     run_record.models_done += 1
                     run_record.cars_fetched += count
@@ -148,7 +149,7 @@ async def _run_async() -> None:
                     settings.min_model_delay_sec, settings.max_model_delay_sec
                 ))
 
-        run_record.finished_at = datetime.now(timezone.utc)
+        run_record.finished_at = datetime.now(UTC)
         await session.commit()
 
         typer.echo(json.dumps({
