@@ -22,6 +22,7 @@ models:
     model_group: Sportage
     model: "Sportage (NQ5)"
     year_from: 2022
+    year_to: 2026
     fuel: hybrid
 
   - slug: hyundai-sonata-dn8
