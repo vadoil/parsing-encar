@@ -132,3 +132,53 @@ top-level ключи ответа.
 | 5 | Dev-ex polish | 0 (no new) | ✅ mypy 0, ruff --fix applied |
 
 **Tests: 80 passed, 2 deselected (live). mypy: clean (24 source files).**
+
+## Фаза 0 — карта полей encar API (коммит docs/encar/field-map.md)
+
+**Цель фазы:** перед большим бэкафиллом зафиксировать РЕАЛЬНУЮ структуру
+ответа `api.encar.com/v1/readside/vehicle/{id}` на ground-truth из
+`output/_details.json` (30 BMW X5 G05). Без правок кода.
+
+### Что найдено (важные расхождения со спекой)
+
+1. **`condition.insurance` = `null` для всех 30 машин.** Гипотеза Фазы 1
+   «реальные ДТП в `condition.insurance`» — **неверна**: encar НЕ возвращает
+   страховую историю в этом endpoint. Запланированные колонки
+   `insurance_accident_my/other`, `insurance_total_loss`, `insurance_flood`,
+   `insurance_theft`, `owner_changes` заполнять нечем.
+
+2. **`category.{driveType, transmission, fuel, origin, vehicleType}` = `null`**
+   для всех 30. Эти поля НЕ возвращаются API — добавлять их в схему нельзя.
+   Drive type / transmission / fuel / origin — брать из других путей
+   (см. field-map.md).
+
+3. **`condition.accident.recordView` = 29/30 (96.7%)** — это НЕ «было ДТП».
+   По структуре это флаг «отчёт истории доступен к просмотру». Real accident
+   data — только в свободном тексте `contents.text` («무사고», «전손», «침수»).
+
+4. **Дубль 41811360/41814518 — одна и та же машина**, `vehicleId=41811360`
+   в обоих. JSON-ключи не каноничны, для dedup — `vehicleId` int
+   (а VIN/photo Jaccard — fallback).
+
+5. **`category.gradeName` = реальные трим-имена** (`'xDrive 30d M 스포츠'` и т.п.)
+   — это **первичный источник для engine_code** при матчинге с HP-каталогом.
+
+6. **`category.originPrice`** — оригинальная цена нового в 만원 (13050 = 130.5M KRW).
+   Доступна для всех 30 машин. Раньше не использовалась.
+
+7. **`category.importType`** — `'REGULAR_IMPORT' × 27, 'NONE_IMPORT_TYPE' × 3`.
+   Не `'PARALLEL_IMPORT'`, как предполагала `translations.py` — нужно проверить
+   покрытие.
+
+8. **`warranty.companyName` — 14 distinct значений**, включая 5 вариантов BMW
+   (`'BMW'`, `'BMW 코리아'`, `'BMW코리아'`, `'bmw코리아'`, `'비엠더블유 코리아'`)
+   и аномалию `'가능' / '불가능'` (строка в объектном поле). Нужен
+   нормализатор + флаг `warranty_anomaly`.
+
+### Файлы
+- `docs/encar/field-map.md` (новый) — карта всех ~100 полей с типами,
+  примерами, distinct-счётчиками, пометками «не возвращается» / «нужна нормализация».
+- `CHANGES_RU.md` (эта секция).
+
+**Tests: без изменений (правок кода не было). Phase 1 приостановлена —
+требуется пересмотр из-за находки про `condition.insurance`.**
