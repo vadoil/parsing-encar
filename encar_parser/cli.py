@@ -27,9 +27,20 @@ from encar_parser.pipeline import make_list_url_for_page, run_model
 from encar_parser.scheduler import models_for_today
 from encar_parser.utils.log import get_logger, setup_logging
 from encar_parser.utils.rate_limit import RandomDelay
+from encar_parser.validate_pool import run_validate_pool
 
 log = get_logger(__name__)
 app = typer.Typer(help="Encar parser CLI")
+
+
+@app.command()
+def validate_pool(
+    config: Path = typer.Option(Path("models.yaml"), "--config", "-c"),
+    disable: bool = typer.Option(False, "--disable", help="Patch models.yaml: set enabled=false on Count=0 entries"),
+    concurrency: int = typer.Option(4, "--concurrency", help="Parallel probes"),
+) -> None:
+    """Probe Count for every enabled model and report anomalies."""
+    run_validate_pool(config, disable=disable, concurrency=concurrency)
 
 
 def _load_models_yaml(path: Path) -> list[dict[str, Any]]:

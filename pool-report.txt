@@ -1,0 +1,35 @@
+## Build pool report
+Total pairs: 131
+Resolved (Count > 0): 105
+Unresolved — no candidate matched: 11
+Unresolved — brand not in Encar catalog: 15
+
+### No candidate matched (manual raw_q from DevTools may help)
+  - BMW 2 Series Active Tourer (F45): no candidate with Count > 0 — manual raw_q needed
+  - BMW 2 Series Active Tourer (U06): no candidate with Count > 0 — manual raw_q needed
+  - BMW 2 Series Gran Coupe (F44): no candidate with Count > 0 — manual raw_q needed
+  - BMW 2 Series Gran Coupe (F74): no candidate with Count > 0 — manual raw_q needed
+  - BMW 3 Series GT (F34): no candidate with Count > 0 — manual raw_q needed
+  - BMW 6 Series GT (G32): no candidate with Count > 0 — manual raw_q needed
+  - Hyundai Accent (New type): no candidate with Count > 0 — manual raw_q needed
+  - Porsche Cayenne (PO536): no candidate with Count > 0 — manual raw_q needed
+  - Porsche Panamera (971): no candidate with Count > 0 — manual raw_q needed
+  - Porsche Panamera (972): no candidate with Count > 0 — manual raw_q needed
+  - Porsche Panamera (976): no candidate with Count > 0 — manual raw_q needed
+
+### Brand not in Encar (skip these — no listings exist)
+  - Jeep Cherokee (KL)
+  - Jeep Gladiator (JT)
+  - Jeep Grand Cherokee (WL)
+  - Jeep Wrangler (JL)
+  - Land Rover Defender (L663)
+  - Nissan Altima (L34)
+  - Nissan Leaf (ZE1)
+  - Nissan Maxima (A36)
+  - Ssangyong Musso (Q300)
+  - Ssangyong Musso Sports (Q250)
+  - Ssangyong Musso Sports Cannes (Q250)
+  - Toyota Camry (XV70)
+  - Toyota Camry (XV80)
+  - Toyota Yaris (Beats)
+  - Volkswagen Passat GT (B8)

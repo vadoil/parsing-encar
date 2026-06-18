@@ -28,6 +28,8 @@ dev = [
     "mypy>=1.10",
     "aiosqlite>=0.22.1",
     "types-PyYAML>=6.0",
+    "openpyxl>=3.1",
+    "pyyaml>=6.0",
 ]
 
 [build-system]

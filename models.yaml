@@ -1,48 +1,1468 @@
 models:
-  - slug: bmw-x5-g05
-    name: "BMW X5 (G05)"
-    enabled: true
-    priority: 10
-    manufacturer: BMW
-    model_group: X5
-    model: "X5 (G05)"
-    year_from: 2018
-    year_to: 2026
-    sort: ModifiedDate
-    # Реальный q из браузера (carType=N, не Y; ModelGroup без C.; Year.range).
-    # raw_q перебивает сгенерированный фильтр — используется как есть.
-    raw_q: "(And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.ModelGroup.X5.))_.Year.range(201800..202699).)"
-    car_type_code: "N"
-
-  - slug: kia-sportage-nq5
-    name: "Kia Sportage (NQ5)"
-    enabled: true
-    priority: 20
-    manufacturer: Kia
-    model_group: Sportage
-    model: "Sportage (NQ5)"
-    year_from: 2022
-    year_to: 2026
-    fuel: hybrid
-
-  - slug: hyundai-sonata-dn8
-    name: "Hyundai Sonata (DN8)"
-    enabled: true
-    priority: 30
-    manufacturer: Hyundai
-    model_group: Sonata
-    model: "Sonata (DN8)"
-    year_from: 2019
-    year_to: 2023
-
-# --- Подсказка ---------------------------------------------------------------
-# Парсер строит запрос к API encar (api.encar.com/search/car/list/general)
-# из полей manufacturer / model_group / model.
-# Если модель возвращает 0 машин — открой encar.com в браузере, примени фильтр,
-# в DevTools → Network скопируй параметр `q` из запроса к /search/car/list/...
-# и вставь его сюда как raw_q. Тогда он используется как есть:
-#
-#   - slug: example-raw
-#     name: "Пример с raw_q"
-#     raw_q: "(And.(C.CarType.Y._.(C.Manufacturer.BMW._.(C.ModelGroup.X5._.Model.X5 (G05).))))"
-#     car_type_code: "Y"   # код CarType внутри q (Y/N) — подбери если q генерится сам
+- slug: electrified-g80-rg3
+  name: Genesis Electrified G80 (RG3)
+  enabled: true
+  priority: 10
+  car_type_code: Y
+  manufacturer: 제네시스
+  model_group: G80
+  model: G80 (RG3)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.제네시스._.(C.ModelGroup.G80._.Model.G80 (RG3).)))_.Year.range(201800..202699).)
+  hp_brand_label: Genesis
+  hp_family_label: Electrified G80 (RG3)
+- slug: g80-rg3
+  name: Genesis G80 (RG3)
+  enabled: true
+  priority: 20
+  car_type_code: Y
+  manufacturer: 제네시스
+  model_group: G80
+  model: G80 (RG3)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.제네시스._.(C.ModelGroup.G80._.Model.G80 (RG3).)))_.Year.range(201800..202699).)
+  hp_brand_label: Genesis
+  hp_family_label: G80 (RG3)
+- slug: g90-rs4
+  name: Genesis G90 (RS4)
+  enabled: true
+  priority: 30
+  car_type_code: Y
+  manufacturer: 제네시스
+  model_group: G90
+  model: G90 (RS4)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.제네시스._.(C.ModelGroup.G90._.Model.G90 (RS4).)))_.Year.range(201800..202699).)
+  hp_brand_label: Genesis
+  hp_family_label: G90 (RS4)
+- slug: accent-new-type
+  name: Hyundai Accent (New type)
+  enabled: false
+  priority: 40
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 엑센트
+  model: ''
+  raw_q: ''
+  hp_brand_label: Hyundai
+  hp_family_label: Accent (New type)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: avante-cn7
+  name: Hyundai Avante (CN7)
+  enabled: true
+  priority: 50
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 아반떼
+  model: 아반떼 (CN7)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.아반떼._.Model.아반떼 (CN7).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Avante (CN7)
+- slug: avante-hybrid-cn7
+  name: Hyundai Avante Hybrid (CN7)
+  enabled: true
+  priority: 60
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 아반떼
+  model: 아반떼 (CN7)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.아반떼._.Model.아반떼 (CN7).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Avante Hybrid (CN7)
+- slug: grandeur-gn7
+  name: Hyundai Grandeur (GN7)
+  enabled: true
+  priority: 70
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 그랜저
+  model: 그랜저 (GN7)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.그랜저._.Model.그랜저 (GN7).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Grandeur (GN7)
+- slug: grandeur-hybrid-gn7
+  name: Hyundai Grandeur Hybrid (GN7)
+  enabled: true
+  priority: 80
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 그랜저
+  model: 그랜저 (GN7)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.그랜저._.Model.그랜저 (GN7).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Grandeur Hybrid (GN7)
+- slug: kona-sx2
+  name: Hyundai Kona (SX2)
+  enabled: true
+  priority: 90
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 코나
+  model: 코나 (SX2)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.코나._.Model.코나 (SX2).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Kona (SX2)
+- slug: kona-hybrid-sx2
+  name: Hyundai Kona Hybrid (SX2)
+  enabled: true
+  priority: 100
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 코나
+  model: 코나 (SX2)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.코나._.Model.코나 (SX2).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Kona Hybrid (SX2)
+- slug: palisade-lx3
+  name: Hyundai Palisade (LX3)
+  enabled: true
+  priority: 110
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 팰리세이드
+  model: 팰리세이드 (LX3)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.팰리세이드._.Model.팰리세이드 (LX3).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Palisade (LX3)
+- slug: santa-fe-mx5
+  name: Hyundai Santa Fe (MX5)
+  enabled: true
+  priority: 120
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 싼타페
+  model: 싼타페 (MX5)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.싼타페._.Model.싼타페 (MX5).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Santa Fe (MX5)
+- slug: sonata-dn8
+  name: Hyundai Sonata (DN8)
+  enabled: true
+  priority: 130
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 쏘나타
+  model: 쏘나타 (DN8)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.쏘나타._.Model.쏘나타 (DN8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Sonata (DN8)
+- slug: sonata-d-edge-dn8
+  name: Hyundai Sonata D Edge (DN8)
+  enabled: true
+  priority: 140
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 쏘나타
+  model: 쏘나타 (DN8)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.쏘나타._.Model.쏘나타 (DN8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Sonata D Edge (DN8)
+- slug: sonata-d-edge-hybrid-dn8
+  name: Hyundai Sonata D Edge Hybrid (DN8)
+  enabled: true
+  priority: 150
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 쏘나타
+  model: 쏘나타 (DN8)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.쏘나타._.Model.쏘나타 (DN8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Sonata D Edge Hybrid (DN8)
+- slug: sonata-hybrid-dn8
+  name: Hyundai Sonata Hybrid (DN8)
+  enabled: true
+  priority: 160
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 쏘나타
+  model: 쏘나타 (DN8)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.쏘나타._.Model.쏘나타 (DN8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Sonata Hybrid (DN8)
+- slug: the-new-avante-cn7
+  name: Hyundai The New Avante (CN7)
+  enabled: true
+  priority: 170
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 아반떼
+  model: 아반떼 (CN7)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.아반떼._.Model.아반떼 (CN7).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: The New Avante (CN7)
+- slug: the-new-avante-hybrid-cn7
+  name: Hyundai The New Avante Hybrid (CN7)
+  enabled: true
+  priority: 180
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 아반떼
+  model: 아반떼 (CN7)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.아반떼._.Model.아반떼 (CN7).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: The New Avante Hybrid (CN7)
+- slug: the-new-tucson-nx4
+  name: Hyundai The New Tucson (NX4)
+  enabled: true
+  priority: 190
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 투싼
+  model: 투싼 (NX4)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.투싼._.Model.투싼 (NX4).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: The New Tucson (NX4)
+- slug: the-new-tucson-hybrid-nx4
+  name: Hyundai The New Tucson Hybrid (NX4)
+  enabled: true
+  priority: 200
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 투싼
+  model: 투싼 (NX4)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.투싼._.Model.투싼 (NX4).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: The New Tucson Hybrid (NX4)
+- slug: tucson-nx4
+  name: Hyundai Tucson (NX4)
+  enabled: true
+  priority: 210
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 투싼
+  model: 투싼 (NX4)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.투싼._.Model.투싼 (NX4).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Tucson (NX4)
+- slug: tucson-hybrid-nx4
+  name: Hyundai Tucson Hybrid (NX4)
+  enabled: true
+  priority: 220
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 투싼
+  model: 투싼 (NX4)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.투싼._.Model.투싼 (NX4).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Tucson Hybrid (NX4)
+- slug: veloster-js
+  name: Hyundai Veloster (JS)
+  enabled: true
+  priority: 230
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: 벨로스터
+  model: 벨로스터 (JS)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.벨로스터._.Model.벨로스터 (JS).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: Veloster (JS)
+- slug: i30-pd
+  name: Hyundai i30 (PD)
+  enabled: true
+  priority: 240
+  car_type_code: Y
+  manufacturer: 현대
+  model_group: i30
+  model: i30 (PD)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.현대._.(C.ModelGroup.i30._.Model.i30 (PD).)))_.Year.range(201800..202699).)
+  hp_brand_label: Hyundai
+  hp_family_label: i30 (PD)
+- slug: all-new-morning-ja
+  name: Kia All New Morning (JA)
+  enabled: true
+  priority: 250
+  car_type_code: Y
+  manufacturer: 기아
+  model_group: 모닝
+  model: 올 뉴 모닝 (JA)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.기아._.(C.ModelGroup.모닝._.Model.올 뉴 모닝 (JA).)))_.Year.range(201800..202699).)
+  hp_brand_label: Kia
+  hp_family_label: All New Morning (JA)
+- slug: morning-urban-ja
+  name: Kia Morning Urban (JA)
+  enabled: true
+  priority: 260
+  car_type_code: Y
+  manufacturer: 기아
+  model_group: 모닝
+  model: 모닝 어반 (JA)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.기아._.(C.ModelGroup.모닝._.Model.모닝 어반 (JA).)))_.Year.range(201800..202699).)
+  hp_brand_label: Kia
+  hp_family_label: Morning Urban (JA)
+- slug: the-new-morning-ja
+  name: Kia The New Morning (JA)
+  enabled: true
+  priority: 270
+  car_type_code: Y
+  manufacturer: 기아
+  model_group: 모닝
+  model: 더 뉴 모닝 (JA)
+  raw_q: (And.Hidden.N._.(C.CarType.Y._.(C.Manufacturer.기아._.(C.ModelGroup.모닝._.Model.더 뉴 모닝 (JA).)))_.Year.range(201800..202699).)
+  hp_brand_label: Kia
+  hp_family_label: The New Morning (JA)
+- slug: musso-q300
+  name: Ssangyong Musso (Q300)
+  enabled: false
+  priority: 280
+  car_type_code: Y
+  manufacturer: 쌍용
+  model_group: 무쏘
+  model: ''
+  raw_q: ''
+  hp_brand_label: Ssangyong
+  hp_family_label: Musso (Q300)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: musso-sports-q250
+  name: Ssangyong Musso Sports (Q250)
+  enabled: false
+  priority: 290
+  car_type_code: Y
+  manufacturer: 쌍용
+  model_group: 무쏘
+  model: ''
+  raw_q: ''
+  hp_brand_label: Ssangyong
+  hp_family_label: Musso Sports (Q250)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: musso-sports-cannes-q250
+  name: Ssangyong Musso Sports Cannes (Q250)
+  enabled: false
+  priority: 300
+  car_type_code: Y
+  manufacturer: 쌍용
+  model_group: 무쏘
+  model: ''
+  raw_q: ''
+  hp_brand_label: Ssangyong
+  hp_family_label: Musso Sports Cannes (Q250)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: a3-8y
+  name: Audi A3 (8Y)
+  enabled: true
+  priority: 310
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A3
+  model: A3 (8Y)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A3._.Model.A3 (8Y).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A3 (8Y)
+- slug: a4-b9
+  name: Audi A4 (B9)
+  enabled: true
+  priority: 320
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A4
+  model: A4 (B9)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A4._.Model.A4 (B9).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A4 (B9)
+- slug: a5-b10
+  name: Audi A5 (B10)
+  enabled: true
+  priority: 330
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A5
+  model: A5 (B10)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A5._.Model.A5 (B10).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A5 (B10)
+- slug: a5-f5
+  name: Audi A5 (F5)
+  enabled: true
+  priority: 340
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A5
+  model: A5 (F5)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A5._.Model.A5 (F5).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A5 (F5)
+- slug: a6-c8
+  name: Audi A6 (C8)
+  enabled: true
+  priority: 350
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A6
+  model: A6 (C8)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A6._.Model.A6 (C8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A6 (C8)
+- slug: a6-c9
+  name: Audi A6 (C9)
+  enabled: true
+  priority: 360
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A6
+  model: A6 (C9)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A6._.Model.A6 (C9).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A6 (C9)
+- slug: a7-4k
+  name: Audi A7 (4K)
+  enabled: true
+  priority: 370
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A7
+  model: A7 (4K)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A7._.Model.A7 (4K).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A7 (4K)
+- slug: a8-d5
+  name: Audi A8 (D5)
+  enabled: true
+  priority: 380
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: A8
+  model: A8 (D5)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.A8._.Model.A8 (D5).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: A8 (D5)
+- slug: q3-f3
+  name: Audi Q3 (F3)
+  enabled: true
+  priority: 390
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: Q3
+  model: Q3 (F3)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.Q3._.Model.Q3 (F3).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: Q3 (F3)
+- slug: q5-80a
+  name: Audi Q5 (80A)
+  enabled: true
+  priority: 400
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: Q5
+  model: Q5 (80A)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.Q5._.Model.Q5 (80A).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: Q5 (80A)
+- slug: q5-fy
+  name: Audi Q5 (FY)
+  enabled: true
+  priority: 410
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: Q5
+  model: Q5 (FY)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.Q5._.Model.Q5 (FY).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: Q5 (FY)
+- slug: q7-4m
+  name: Audi Q7 (4M)
+  enabled: true
+  priority: 420
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: Q7
+  model: Q7 (4M)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.Q7._.Model.Q7 (4M).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: Q7 (4M)
+- slug: q8-4m
+  name: Audi Q8 (4M)
+  enabled: true
+  priority: 430
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: Q8
+  model: Q8 (4M)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.Q8._.Model.Q8 (4M).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: Q8 (4M)
+- slug: r8-4s
+  name: Audi R8 (4S)
+  enabled: true
+  priority: 440
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: R8
+  model: R8 (4S)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.R8._.Model.R8 (4S).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: R8 (4S)
+- slug: rs3-8y
+  name: Audi RS3 (8Y)
+  enabled: true
+  priority: 450
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: RS3
+  model: RS3 (8Y)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.RS3._.Model.RS3 (8Y).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: RS3 (8Y)
+- slug: rs5-f5
+  name: Audi RS5 (F5)
+  enabled: true
+  priority: 460
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: RS5
+  model: RS5 (F5)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.RS5._.Model.RS5 (F5).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: RS5 (F5)
+- slug: rs6-c8
+  name: Audi RS6 (C8)
+  enabled: true
+  priority: 470
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: RS6
+  model: RS6 (C8)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.RS6._.Model.RS6 (C8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: RS6 (C8)
+- slug: rs7-4k
+  name: Audi RS7 (4K)
+  enabled: true
+  priority: 480
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: RS7
+  model: RS7 (4K)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.RS7._.Model.RS7 (4K).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: RS7 (4K)
+- slug: rsq8-4m
+  name: Audi RSQ8 (4M)
+  enabled: true
+  priority: 490
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: RSQ8
+  model: RSQ8 (4M)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.RSQ8._.Model.RSQ8 (4M).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: RSQ8 (4M)
+- slug: s3-8y
+  name: Audi S3 (8Y)
+  enabled: true
+  priority: 500
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: S3
+  model: S3 (8Y)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.S3._.Model.S3 (8Y).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: S3 (8Y)
+- slug: s4-b9
+  name: Audi S4 (B9)
+  enabled: true
+  priority: 510
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: S4
+  model: S4 (B9)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.S4._.Model.S4 (B9).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: S4 (B9)
+- slug: s5-f5
+  name: Audi S5 (F5)
+  enabled: true
+  priority: 520
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: S5
+  model: S5 (F5)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.S5._.Model.S5 (F5).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: S5 (F5)
+- slug: s6-c8
+  name: Audi S6 (C8)
+  enabled: true
+  priority: 530
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: S6
+  model: S6 (C8)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.S6._.Model.S6 (C8).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: S6 (C8)
+- slug: s7-4k
+  name: Audi S7 (4K)
+  enabled: true
+  priority: 540
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: S7
+  model: S7 (4K)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.S7._.Model.S7 (4K).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: S7 (4K)
+- slug: s8-d5
+  name: Audi S8 (D5)
+  enabled: true
+  priority: 550
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: S8
+  model: S8 (D5)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.S8._.Model.S8 (D5).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: S8 (D5)
+- slug: sq5-fy
+  name: Audi SQ5 (FY)
+  enabled: true
+  priority: 560
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: SQ5
+  model: SQ5 (FY)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.SQ5._.Model.SQ5 (FY).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: SQ5 (FY)
+- slug: sq7-4m
+  name: Audi SQ7 (4M)
+  enabled: true
+  priority: 570
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: SQ7
+  model: SQ7 (4M)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.SQ7._.Model.SQ7 (4M).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: SQ7 (4M)
+- slug: sq8-4m
+  name: Audi SQ8 (4M)
+  enabled: true
+  priority: 580
+  car_type_code: N
+  manufacturer: 아우디
+  model_group: SQ8
+  model: SQ8 (4M)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.아우디._.(C.ModelGroup.SQ8._.Model.SQ8 (4M).)))_.Year.range(201800..202699).)
+  hp_brand_label: Audi
+  hp_family_label: SQ8 (4M)
+- slug: 1-series-f20
+  name: BMW 1 Series (F20)
+  enabled: true
+  priority: 590
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 1시리즈
+  model: 1시리즈 (F20)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.1시리즈._.Model.1시리즈 (F20).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 1 Series (F20)
+- slug: 1-series-f40
+  name: BMW 1 Series (F40)
+  enabled: true
+  priority: 600
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 1시리즈
+  model: 1시리즈 (F40)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.1시리즈._.Model.1시리즈 (F40).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 1 Series (F40)
+- slug: 1-series-f70
+  name: BMW 1 Series (F70)
+  enabled: true
+  priority: 610
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 1시리즈
+  model: 1시리즈 (F70)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.1시리즈._.Model.1시리즈 (F70).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 1 Series (F70)
+- slug: 2-series-g42
+  name: BMW 2 Series (G42)
+  enabled: true
+  priority: 620
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 2시리즈
+  model: 2시리즈 (G42)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.2시리즈._.Model.2시리즈 (G42).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 2 Series (G42)
+- slug: 2-series-active-tourer-f45
+  name: BMW 2 Series Active Tourer (F45)
+  enabled: false
+  priority: 630
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 2 Series Active Tourer
+  model: ''
+  raw_q: ''
+  hp_brand_label: BMW
+  hp_family_label: 2 Series Active Tourer (F45)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 2-series-active-tourer-u06
+  name: BMW 2 Series Active Tourer (U06)
+  enabled: false
+  priority: 640
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 2 Series Active Tourer
+  model: ''
+  raw_q: ''
+  hp_brand_label: BMW
+  hp_family_label: 2 Series Active Tourer (U06)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 2-series-gran-coupe-f44
+  name: BMW 2 Series Gran Coupe (F44)
+  enabled: false
+  priority: 650
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 2 Series Gran Coupe
+  model: ''
+  raw_q: ''
+  hp_brand_label: BMW
+  hp_family_label: 2 Series Gran Coupe (F44)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 2-series-gran-coupe-f74
+  name: BMW 2 Series Gran Coupe (F74)
+  enabled: false
+  priority: 660
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 2 Series Gran Coupe
+  model: ''
+  raw_q: ''
+  hp_brand_label: BMW
+  hp_family_label: 2 Series Gran Coupe (F74)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 3-series-f30
+  name: BMW 3 Series (F30)
+  enabled: true
+  priority: 670
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 3시리즈
+  model: 3시리즈 (F30)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.3시리즈._.Model.3시리즈 (F30).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 3 Series (F30)
+- slug: 3-series-g20
+  name: BMW 3 Series (G20)
+  enabled: true
+  priority: 680
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 3시리즈
+  model: 3시리즈 (G20)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.3시리즈._.Model.3시리즈 (G20).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 3 Series (G20)
+- slug: 3-series-gt-f34
+  name: BMW 3 Series GT (F34)
+  enabled: false
+  priority: 690
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 3 Series GT
+  model: ''
+  raw_q: ''
+  hp_brand_label: BMW
+  hp_family_label: 3 Series GT (F34)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 4-series-f32
+  name: BMW 4 Series (F32)
+  enabled: true
+  priority: 700
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 4시리즈
+  model: 4시리즈 (F32)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.4시리즈._.Model.4시리즈 (F32).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 4 Series (F32)
+- slug: 4-series-g22
+  name: BMW 4 Series (G22)
+  enabled: true
+  priority: 710
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 4시리즈
+  model: 4시리즈 (G22)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.4시리즈._.Model.4시리즈 (G22).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 4 Series (G22)
+- slug: 5-series-g30
+  name: BMW 5 Series (G30)
+  enabled: true
+  priority: 720
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 5시리즈
+  model: 5시리즈 (G30)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.5시리즈._.Model.5시리즈 (G30).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 5 Series (G30)
+- slug: 5-series-g60
+  name: BMW 5 Series (G60)
+  enabled: true
+  priority: 730
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 5시리즈
+  model: 5시리즈 (G60)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.5시리즈._.Model.5시리즈 (G60).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 5 Series (G60)
+- slug: 6-series-f12
+  name: BMW 6 Series (F12)
+  enabled: true
+  priority: 740
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 6시리즈
+  model: 6시리즈 (F12)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.6시리즈._.Model.6시리즈 (F12).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 6 Series (F12)
+- slug: 6-series-gt-g32
+  name: BMW 6 Series GT (G32)
+  enabled: false
+  priority: 750
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 6 Series GT
+  model: ''
+  raw_q: ''
+  hp_brand_label: BMW
+  hp_family_label: 6 Series GT (G32)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 7-series-g11
+  name: BMW 7 Series (G11)
+  enabled: true
+  priority: 760
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 7시리즈
+  model: 7시리즈 (G11)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.7시리즈._.Model.7시리즈 (G11).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 7 Series (G11)
+- slug: 7-series-g70
+  name: BMW 7 Series (G70)
+  enabled: true
+  priority: 770
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 7시리즈
+  model: 7시리즈 (G70)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.7시리즈._.Model.7시리즈 (G70).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 7 Series (G70)
+- slug: 8-series-g15
+  name: BMW 8 Series (G15)
+  enabled: true
+  priority: 780
+  car_type_code: N
+  manufacturer: BMW
+  model_group: 8시리즈
+  model: 8시리즈 (G15)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.8시리즈._.Model.8시리즈 (G15).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: 8 Series (G15)
+- slug: m2-f87
+  name: BMW M2 (F87)
+  enabled: true
+  priority: 790
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M2
+  model: M2 (F87)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M2._.Model.M2 (F87).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M2 (F87)
+- slug: m2-g87
+  name: BMW M2 (G87)
+  enabled: true
+  priority: 800
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M2
+  model: M2 (G87)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M2._.Model.M2 (G87).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M2 (G87)
+- slug: m3-f80
+  name: BMW M3 (F80)
+  enabled: true
+  priority: 810
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M3
+  model: M3 (F80)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M3._.Model.M3 (F80).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M3 (F80)
+- slug: m3-g80
+  name: BMW M3 (G80)
+  enabled: true
+  priority: 820
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M3
+  model: M3 (G80)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M3._.Model.M3 (G80).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M3 (G80)
+- slug: m4-f82
+  name: BMW M4 (F82)
+  enabled: true
+  priority: 830
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M4
+  model: M4 (F82)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M4._.Model.M4 (F82).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M4 (F82)
+- slug: m4-g82
+  name: BMW M4 (G82)
+  enabled: true
+  priority: 840
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M4
+  model: M4 (G82)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M4._.Model.M4 (G82).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M4 (G82)
+- slug: m5-f90
+  name: BMW M5 (F90)
+  enabled: true
+  priority: 850
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M5
+  model: M5 (F90)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M5._.Model.M5 (F90).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M5 (F90)
+- slug: m5-g90
+  name: BMW M5 (G90)
+  enabled: true
+  priority: 860
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M5
+  model: M5 (G90)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M5._.Model.M5 (G90).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M5 (G90)
+- slug: m8-g15
+  name: BMW M8 (G15)
+  enabled: true
+  priority: 870
+  car_type_code: N
+  manufacturer: BMW
+  model_group: M8
+  model: M8 (G15)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.M8._.Model.M8 (G15).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: M8 (G15)
+- slug: x1-f48
+  name: BMW X1 (F48)
+  enabled: true
+  priority: 880
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X1
+  model: X1 (F48)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X1._.Model.X1 (F48).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X1 (F48)
+- slug: x1-u11
+  name: BMW X1 (U11)
+  enabled: true
+  priority: 890
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X1
+  model: X1 (U11)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X1._.Model.X1 (U11).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X1 (U11)
+- slug: x2-f39
+  name: BMW X2 (F39)
+  enabled: true
+  priority: 900
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X2
+  model: X2 (F39)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X2._.Model.X2 (F39).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X2 (F39)
+- slug: x2-u10
+  name: BMW X2 (U10)
+  enabled: true
+  priority: 910
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X2
+  model: X2 (U10)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X2._.Model.X2 (U10).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X2 (U10)
+- slug: x3-g01
+  name: BMW X3 (G01)
+  enabled: true
+  priority: 920
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X3
+  model: X3 (G01)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X3._.Model.X3 (G01).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X3 (G01)
+- slug: x3-g45
+  name: BMW X3 (G45)
+  enabled: true
+  priority: 930
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X3
+  model: X3 (G45)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X3._.Model.X3 (G45).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X3 (G45)
+- slug: x3m-g01
+  name: BMW X3M (G01)
+  enabled: true
+  priority: 940
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X3M
+  model: X3M (G01)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X3M._.Model.X3M (G01).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X3M (G01)
+- slug: x4-f26
+  name: BMW X4 (F26)
+  enabled: true
+  priority: 950
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X4
+  model: X4 (F26)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X4._.Model.X4 (F26).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X4 (F26)
+- slug: x4-g02
+  name: BMW X4 (G02)
+  enabled: true
+  priority: 960
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X4
+  model: X4 (G02)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X4._.Model.X4 (G02).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X4 (G02)
+- slug: x4m-g02
+  name: BMW X4M (G02)
+  enabled: true
+  priority: 970
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X4M
+  model: X4M (G02)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X4M._.Model.X4M (G02).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X4M (G02)
+- slug: x5-f15
+  name: BMW X5 (F15)
+  enabled: true
+  priority: 980
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X5
+  model: X5 (F15)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X5._.Model.X5 (F15).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X5 (F15)
+- slug: x5-g05
+  name: BMW X5 (G05)
+  enabled: true
+  priority: 990
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X5
+  model: X5 (G05)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X5._.Model.X5 (G05).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X5 (G05)
+- slug: x5m-f15
+  name: BMW X5M (F15)
+  enabled: true
+  priority: 1000
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X5M
+  model: X5M (F15)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X5M._.Model.X5M (F15).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X5M (F15)
+- slug: x5m-g05
+  name: BMW X5M (G05)
+  enabled: true
+  priority: 1010
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X5M
+  model: X5M (G05)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X5M._.Model.X5M (G05).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X5M (G05)
+- slug: x6-f16
+  name: BMW X6 (F16)
+  enabled: true
+  priority: 1020
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X6
+  model: X6 (F16)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X6._.Model.X6 (F16).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X6 (F16)
+- slug: x6-g06
+  name: BMW X6 (G06)
+  enabled: true
+  priority: 1030
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X6
+  model: X6 (G06)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X6._.Model.X6 (G06).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X6 (G06)
+- slug: x6m-f16
+  name: BMW X6M (F16)
+  enabled: true
+  priority: 1040
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X6M
+  model: X6M (F16)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X6M._.Model.X6M (F16).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X6M (F16)
+- slug: x6m-g06
+  name: BMW X6M (G06)
+  enabled: true
+  priority: 1050
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X6M
+  model: X6M (G06)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X6M._.Model.X6M (G06).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X6M (G06)
+- slug: x7-g07
+  name: BMW X7 (G07)
+  enabled: true
+  priority: 1060
+  car_type_code: N
+  manufacturer: BMW
+  model_group: X7
+  model: X7 (G07)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.X7._.Model.X7 (G07).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: X7 (G07)
+- slug: xm-g09
+  name: BMW XM (G09)
+  enabled: true
+  priority: 1070
+  car_type_code: N
+  manufacturer: BMW
+  model_group: XM
+  model: XM (G09)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.XM._.Model.XM (G09).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: XM (G09)
+- slug: z4-g29
+  name: BMW Z4 (G29)
+  enabled: true
+  priority: 1080
+  car_type_code: N
+  manufacturer: BMW
+  model_group: Z4
+  model: Z4 (G29)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.Z4._.Model.Z4 (G29).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: Z4 (G29)
+- slug: i5-g60
+  name: BMW i5 (G60)
+  enabled: true
+  priority: 1090
+  car_type_code: N
+  manufacturer: BMW
+  model_group: i5
+  model: i5 (G60)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.i5._.Model.i5 (G60).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: i5 (G60)
+- slug: i7-g70
+  name: BMW i7 (G70)
+  enabled: true
+  priority: 1100
+  car_type_code: N
+  manufacturer: BMW
+  model_group: i7
+  model: i7 (G70)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.i7._.Model.i7 (G70).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: i7 (G70)
+- slug: ix1-u11
+  name: BMW iX1 (U11)
+  enabled: true
+  priority: 1110
+  car_type_code: N
+  manufacturer: BMW
+  model_group: iX1
+  model: iX1 (U11)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.(C.ModelGroup.iX1._.Model.iX1 (U11).)))_.Year.range(201800..202699).)
+  hp_brand_label: BMW
+  hp_family_label: iX1 (U11)
+- slug: q60-cv37
+  name: Infiniti Q60 (CV37)
+  enabled: true
+  priority: 1120
+  car_type_code: N
+  manufacturer: 인피니티
+  model_group: Q60
+  model: Q60 (CV37)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.인피니티._.(C.ModelGroup.Q60._.Model.Q60 (CV37).)))_.Year.range(201800..202699).)
+  hp_brand_label: Infiniti
+  hp_family_label: Q60 (CV37)
+- slug: qx50-p71a
+  name: Infiniti QX50 (P71A)
+  enabled: true
+  priority: 1130
+  car_type_code: N
+  manufacturer: 인피니티
+  model_group: QX50
+  model: QX50 (P71A)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.인피니티._.(C.ModelGroup.QX50._.Model.QX50 (P71A).)))_.Year.range(201800..202699).)
+  hp_brand_label: Infiniti
+  hp_family_label: QX50 (P71A)
+- slug: xf-x260
+  name: Jaguar XF (X260)
+  enabled: true
+  priority: 1140
+  car_type_code: N
+  manufacturer: 재규어
+  model_group: XF
+  model: XF (X260)
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.재규어._.(C.ModelGroup.XF._.Model.XF (X260).)))_.Year.range(201800..202699).)
+  hp_brand_label: Jaguar
+  hp_family_label: XF (X260)
+- slug: cherokee-kl
+  name: Jeep Cherokee (KL)
+  enabled: false
+  priority: 1150
+  car_type_code: N
+  manufacturer: Jeep
+  model_group: Cherokee
+  model: ''
+  raw_q: ''
+  hp_brand_label: Jeep
+  hp_family_label: Cherokee (KL)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: gladiator-jt
+  name: Jeep Gladiator (JT)
+  enabled: false
+  priority: 1160
+  car_type_code: N
+  manufacturer: Jeep
+  model_group: Gladiator
+  model: ''
+  raw_q: ''
+  hp_brand_label: Jeep
+  hp_family_label: Gladiator (JT)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: grand-cherokee-wl
+  name: Jeep Grand Cherokee (WL)
+  enabled: false
+  priority: 1170
+  car_type_code: N
+  manufacturer: Jeep
+  model_group: Grand Cherokee
+  model: ''
+  raw_q: ''
+  hp_brand_label: Jeep
+  hp_family_label: Grand Cherokee (WL)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: wrangler-jl
+  name: Jeep Wrangler (JL)
+  enabled: false
+  priority: 1180
+  car_type_code: N
+  manufacturer: Jeep
+  model_group: Wrangler
+  model: ''
+  raw_q: ''
+  hp_brand_label: Jeep
+  hp_family_label: Wrangler (JL)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: defender-l663
+  name: Land Rover Defender (L663)
+  enabled: false
+  priority: 1190
+  car_type_code: N
+  manufacturer: Land Rover
+  model_group: Defender
+  model: ''
+  raw_q: ''
+  hp_brand_label: Land Rover
+  hp_family_label: Defender (L663)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: altima-l34
+  name: Nissan Altima (L34)
+  enabled: false
+  priority: 1200
+  car_type_code: N
+  manufacturer: Nissan
+  model_group: Altima
+  model: ''
+  raw_q: ''
+  hp_brand_label: Nissan
+  hp_family_label: Altima (L34)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: leaf-ze1
+  name: Nissan Leaf (ZE1)
+  enabled: false
+  priority: 1210
+  car_type_code: N
+  manufacturer: Nissan
+  model_group: Leaf
+  model: ''
+  raw_q: ''
+  hp_brand_label: Nissan
+  hp_family_label: Leaf (ZE1)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: maxima-a36
+  name: Nissan Maxima (A36)
+  enabled: false
+  priority: 1220
+  car_type_code: N
+  manufacturer: Nissan
+  model_group: Maxima
+  model: ''
+  raw_q: ''
+  hp_brand_label: Nissan
+  hp_family_label: Maxima (A36)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: 911-992
+  name: Porsche 911(992)
+  enabled: true
+  priority: 1230
+  car_type_code: N
+  manufacturer: 포르쉐
+  model_group: '911'
+  model: '911'
+  raw_q: (And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.포르쉐._.(C.ModelGroup.911._.Model.911.)))_.Year.range(201800..202699).)
+  hp_brand_label: Porsche
+  hp_family_label: 911(992)
+- slug: cayenne-po536
+  name: Porsche Cayenne (PO536)
+  enabled: false
+  priority: 1240
+  car_type_code: N
+  manufacturer: 포르쉐
+  model_group: Cayenne
+  model: ''
+  raw_q: ''
+  hp_brand_label: Porsche
+  hp_family_label: Cayenne (PO536)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: panamera-971
+  name: Porsche Panamera (971)
+  enabled: false
+  priority: 1250
+  car_type_code: N
+  manufacturer: 포르쉐
+  model_group: Panamera
+  model: ''
+  raw_q: ''
+  hp_brand_label: Porsche
+  hp_family_label: Panamera (971)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: panamera-972
+  name: Porsche Panamera (972)
+  enabled: false
+  priority: 1260
+  car_type_code: N
+  manufacturer: 포르쉐
+  model_group: Panamera
+  model: ''
+  raw_q: ''
+  hp_brand_label: Porsche
+  hp_family_label: Panamera (972)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: panamera-976
+  name: Porsche Panamera (976)
+  enabled: false
+  priority: 1270
+  car_type_code: N
+  manufacturer: 포르쉐
+  model_group: Panamera
+  model: ''
+  raw_q: ''
+  hp_brand_label: Porsche
+  hp_family_label: Panamera (976)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: camry-xv70
+  name: Toyota Camry (XV70)
+  enabled: false
+  priority: 1280
+  car_type_code: N
+  manufacturer: Toyota
+  model_group: Camry
+  model: ''
+  raw_q: ''
+  hp_brand_label: Toyota
+  hp_family_label: Camry (XV70)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: camry-xv80
+  name: Toyota Camry (XV80)
+  enabled: false
+  priority: 1290
+  car_type_code: N
+  manufacturer: Toyota
+  model_group: Camry
+  model: ''
+  raw_q: ''
+  hp_brand_label: Toyota
+  hp_family_label: Camry (XV80)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: yaris-beats
+  name: Toyota Yaris (Beats)
+  enabled: false
+  priority: 1300
+  car_type_code: N
+  manufacturer: Toyota
+  model_group: Yaris
+  model: ''
+  raw_q: ''
+  hp_brand_label: Toyota
+  hp_family_label: Yaris (Beats)
+  note: no candidate with Count > 0 — manual raw_q needed
+- slug: passat-gt-b8
+  name: Volkswagen Passat GT (B8)
+  enabled: false
+  priority: 1310
+  car_type_code: N
+  manufacturer: Volkswagen
+  model_group: Passat GT
+  model: ''
+  raw_q: ''
+  hp_brand_label: Volkswagen
+  hp_family_label: Passat GT (B8)
+  note: no candidate with Count > 0 — manual raw_q needed
