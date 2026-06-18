@@ -34,8 +34,11 @@ class Settings(BaseSettings):
     max_model_delay_sec: float = 15.0
 
     # Pagination safety: how many list pages to fetch per model before giving up.
-    # encar caps search results at ~1000 cars; beyond that the API returns empty.
-    max_pages: int = 10
+    # A single encar model can return up to ~1000+ cars (e.g. BMW X5 = 1102,
+    # 56 pages at 20 items each). The actual stop condition is total_collected
+    # >= reported Count, so this is just a backstop for missing/broken Count.
+    # Default 200 covers ~4000 cars, comfortably over any realistic model.
+    max_pages: int = 200
     page_size: int = 20
 
 
