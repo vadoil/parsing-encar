@@ -1,48 +1,65 @@
-import pytest
+from urllib.parse import unquote
 
-from encar_parser.encar_url import ModelConfig, build_action, build_url
-
-
-def test_build_action_minimal():
-    cfg = ModelConfig(slug="bmw-x5-g05", name="BMW X5 (G05)", manufacturer="BMW", model_group="X5")
-    action = build_action(cfg)
-
-    assert "Manufacturer.BMW" in action["action"]
-    assert "ModelGroup.X5" in action["action"]
-    assert "Hidden.N" in action["action"]
-    assert "CarType.N" in action["action"]
-    assert action["sort"] == "ModifiedDate"
-    assert action["limit"] == 20
-    assert action["page"] == 1
+from encar_parser.encar_url import (
+    ModelConfig,
+    build_action,
+    build_list_api_url,
+    build_q,
+    build_sr,
+    build_url,
+)
 
 
-def test_build_action_with_year_range():
+def test_build_q_minimal():
     cfg = ModelConfig(
-        slug="x", name="x",
-        manufacturer="BMW", model="X5 (G05)",
-        year_from=2018, year_to=2025,
+        slug="bmw-x5-g05", name="BMW X5 (G05)", manufacturer="BMW", model_group="X5"
     )
-    action = build_action(cfg)
-    payload = action["action"]
-    assert "Model.X5" in payload
-    # Year range encoded in action
-    assert "2018" in payload or "Year" in payload
+    q = build_q(cfg)
+    assert q.startswith("(And.(")
+    assert "C.CarType." in q
+    assert "C.Manufacturer.BMW" in q
+    assert "C.ModelGroup.X5" in q
 
 
-def test_build_action_with_optional_filters():
+def test_build_q_with_model_nests_deepest():
     cfg = ModelConfig(
-        slug="x", name="x",
-        manufacturer="Kia", model_group="Sportage", model="Sportage",
-        fuel="hybrid", transmission="automatic", body_type="SUV",
+        slug="x", name="x", manufacturer="BMW", model_group="X5", model="X5 (G05)"
     )
-    action = build_action(cfg)
-    assert "Fuel.hybrid" in action["action"]
-    assert "Transmission.automatic" in action["action"]
-    assert "BodyType.SUV" in action["action"]
+    q = build_q(cfg)
+    assert "Model.X5 (G05)" in q
+    # deepest level uses bare field name, not C.Model
+    assert "C.Model." not in q
 
 
-def test_build_url_returns_full_url():
-    cfg = ModelConfig(slug="bmw-x5-g05", name="BMW X5 (G05)", manufacturer="BMW", model_group="X5")
+def test_build_q_raw_override():
+    raw = "(And.(C.CarType.Y._.C.Manufacturer.벤츠.))"
+    cfg = ModelConfig(slug="x", name="x", manufacturer="BMW", raw_q=raw)
+    assert build_q(cfg) == raw
+
+
+def test_build_sr_pagination():
+    cfg = ModelConfig(slug="x", name="x", limit=20)
+    assert build_sr(cfg, page=1) == "|ModifiedDate|0|20"
+    assert build_sr(cfg, page=3) == "|ModifiedDate|40|20"
+
+
+def test_build_list_api_url():
+    cfg = ModelConfig(
+        slug="bmw-x5-g05", name="BMW X5 (G05)", manufacturer="BMW", model_group="X5"
+    )
     url = build_url(cfg)
-    assert url.startswith("https://www.encar.com/fc/fc_carsearchlist.do?carType=for#!")
-    assert "Manufacturer.BMW" in url
+    assert url.startswith("https://api.encar.com/search/car/list/general?")
+    decoded = unquote(url)
+    assert "q=(And." in decoded
+    assert "Manufacturer.BMW" in decoded
+    assert "sr=|ModifiedDate|0|20" in decoded
+    # build_url and build_list_api_url agree
+    assert url == build_list_api_url(cfg)
+
+
+def test_build_action_reference_payload():
+    cfg = ModelConfig(slug="x", name="x", manufacturer="BMW", model_group="X5")
+    action = build_action(cfg)
+    assert "q" in action and "sr" in action
+    assert action["api_url"].startswith("https://api.encar.com/")
+    assert action["frontend_url"].startswith("https://www.encar.com/")

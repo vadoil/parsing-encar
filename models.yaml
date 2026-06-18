@@ -7,8 +7,12 @@ models:
     model_group: X5
     model: "X5 (G05)"
     year_from: 2018
-    year_to: 2025
+    year_to: 2026
     sort: ModifiedDate
+    # Реальный q из браузера (carType=N, не Y; ModelGroup без C.; Year.range).
+    # raw_q перебивает сгенерированный фильтр — используется как есть.
+    raw_q: "(And.Hidden.N._.(C.CarType.N._.(C.Manufacturer.BMW._.ModelGroup.X5.))_.Year.range(201800..202699).)"
+    car_type_code: "N"
 
   - slug: kia-sportage-nq5
     name: "Kia Sportage (NQ5)"
@@ -29,3 +33,15 @@ models:
     model: "Sonata (DN8)"
     year_from: 2019
     year_to: 2023
+
+# --- Подсказка ---------------------------------------------------------------
+# Парсер строит запрос к API encar (api.encar.com/search/car/list/general)
+# из полей manufacturer / model_group / model.
+# Если модель возвращает 0 машин — открой encar.com в браузере, примени фильтр,
+# в DevTools → Network скопируй параметр `q` из запроса к /search/car/list/...
+# и вставь его сюда как raw_q. Тогда он используется как есть:
+#
+#   - slug: example-raw
+#     name: "Пример с raw_q"
+#     raw_q: "(And.(C.CarType.Y._.(C.Manufacturer.BMW._.(C.ModelGroup.X5._.Model.X5 (G05).))))"
+#     car_type_code: "Y"   # код CarType внутри q (Y/N) — подбери если q генерится сам

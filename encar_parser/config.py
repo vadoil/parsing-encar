@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     sentry_dsn: str = ""
 
+    # encar API endpoints (overridable if encar changes them)
+    api_list_base: str = "https://api.encar.com/search/car/list/general"
+    api_detail_template: str = "https://api.encar.com/v1/readside/vehicle/{encar_id}"
+    encar_referer: str = "https://www.encar.com/fc/fc_carsearchlist.do"
+
     rate_limit_per_hour: int = 1200
     request_timeout_sec: int = 30
     retry_max_attempts: int = 3

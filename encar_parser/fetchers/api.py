@@ -26,8 +26,10 @@ class ApiFetcher:
             timeout=timeout,
             follow_redirects=True,
             headers={
-                "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
+                "Accept": "application/json, text/plain, */*",
                 "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8,ru;q=0.7",
+                "Origin": "https://www.encar.com",
+                "Referer": self._settings.encar_referer,
             },
         )
         return self

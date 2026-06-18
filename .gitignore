@@ -11,3 +11,15 @@ htmlcov/
 .coverage
 *.log
 tests/fixtures/live_*.json
+
+# Generated export artifacts (regenerable from build_export.py)
+output/_raw_*.json
+output/_details.json
+output/encar_export.csv
+output/encar_export.html
+output/encar_export.jsonld.json
+output/photos/
+
+# Deploy secrets
+deploy/.env
+deploy/*.tar.gz

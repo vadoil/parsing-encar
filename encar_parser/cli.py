@@ -131,8 +131,8 @@ async def _run_async() -> None:
                         sm,
                         fetcher=fetcher,
                         session=session,
-                        list_url=sm.encar_url,
-                        detail_url_template="https://fem.encar.com/cars/detail/{encar_id}",
+                        list_url=sm.encar_url,  # now the real api.encar.com list URL
+                        detail_url_template=settings.api_detail_template,
                         request_delay=request_delay,
                     )
                     run_record.models_done += 1
@@ -167,3 +167,60 @@ def migrate() -> None:
     setup_logging()
     result = subprocess.run(["alembic", "upgrade", "head"], check=False)
     raise typer.Exit(result.returncode)
+
+
+@app.command()
+def probe(
+    slug: str = typer.Argument(..., help="slug from models.yaml to test"),
+    config_path: Path = typer.Option(Path("models.yaml"), "--config", "-c"),
+    detail_id: int = typer.Option(
+        0, "--detail-id", help="also fetch this car-detail id from the API"
+    ),
+) -> None:
+    """Hit the live encar API for one model and print raw JSON.
+
+    Use this to confirm the real field names before trusting the parsers.
+    """
+    setup_logging()
+    asyncio.run(_probe_async(slug, config_path, detail_id))
+
+
+async def _probe_async(slug: str, config_path: Path, detail_id: int) -> None:
+    from encar_parser.encar_url import ModelConfig, build_list_api_url
+    from encar_parser.parsers.list_page import parse_search_list_result
+
+    settings = get_settings()
+    items = _load_models_yaml(config_path)
+    match = next((i for i in items if i.get("slug") == slug), None)
+    if match is None:
+        typer.echo(f"slug '{slug}' not found in {config_path}", err=True)
+        raise typer.Exit(1)
+
+    cfg = ModelConfig(**{k: v for k, v in match.items() if k != "enabled"})
+    list_url = build_list_api_url(cfg)
+    typer.echo(f"LIST URL:\n{list_url}\n")
+
+    async with ApiFetcher() as api:
+        resp = await api.get(list_url, referer=settings.encar_referer)
+        try:
+            payload = resp.json()
+        except Exception:
+            typer.echo("Response was not JSON. First 500 bytes:", err=True)
+            typer.echo(resp.text()[:500])
+            raise typer.Exit(2)
+
+        parsed = parse_search_list_result(payload)
+        typer.echo(f"Count={parsed.total}  parsed_items={len(parsed.items)}")
+        if parsed.items:
+            typer.echo("First item: " + json.dumps(
+                parsed.items[0].__dict__, ensure_ascii=False
+            ))
+        # Show the top-level keys so you can map fields if the shape differs.
+        if isinstance(payload, dict):
+            typer.echo("Top-level keys: " + ", ".join(map(str, payload.keys())))
+
+        if detail_id:
+            durl = settings.api_detail_template.format(encar_id=detail_id)
+            typer.echo(f"\nDETAIL URL:\n{durl}")
+            dresp = await api.get(durl, referer=settings.encar_referer)
+            typer.echo(dresp.text()[:1500])

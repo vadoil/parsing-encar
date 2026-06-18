@@ -34,6 +34,9 @@ COLOR_KO_TO_RU: dict[str, str] = {
 IMPORT_TYPE_KO_TO_RU: dict[str, str] = {
     "정식수입": "Официальный",
     "병행수입": "Параллельный",
+    # English codes used by the v1/readside/vehicle/{id} endpoint.
+    "REGULAR_IMPORT": "Официальный",
+    "PARALLEL_IMPORT": "Параллельный",
 }
 
 
