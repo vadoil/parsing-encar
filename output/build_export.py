@@ -110,7 +110,7 @@ def build_csv(sample: list[dict], details: dict[str, dict]) -> None:
             "photo_urls": ";".join(photo_paths),
             "detail_url": ENCAR_DETAIL_URL.format(carid=carid),
             "view_on_encar": ENCAR_VIEW_URL.format(carid=carid),
-            "accident_record": "yes" if (condition.get("accident") or {}).get("recordView") else "no",
+            "accident_report_available": "yes" if (condition.get("accident") or {}).get("recordView") else "no",
             "pledge_count": str((condition.get("seizing") or {}).get("pledgeCount") or 0),
             "seizing_count": str((condition.get("seizing") or {}).get("seizingCount") or 0),
         })
@@ -123,7 +123,7 @@ def build_csv(sample: list[dict], details: dict[str, dict]) -> None:
         "city",
         "photo_count", "main_photo", "photo_urls",
         "detail_url", "view_on_encar",
-        "accident_record", "pledge_count", "seizing_count",
+        "accident_report_available", "pledge_count", "seizing_count",
     ]
     with CSV_PATH.open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=cols)

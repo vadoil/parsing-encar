@@ -114,7 +114,7 @@ async def _process_items(
                 import_type_ru=car_data.import_type_ru,
                 manufacturer_warranty=car_data.manufacturer_warranty,
                 liens_seizures=car_data.liens_seizures,
-                accident_records=car_data.accident_records,
+                accident_report_available=car_data.accident_report_available,
                 plate_number=car_data.plate_number,
                 price_krw=car_data.price_krw,
                 photo_urls=car_data.photo_urls,

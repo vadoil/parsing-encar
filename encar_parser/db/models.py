@@ -68,7 +68,11 @@ class Car(Base):
     manufacturer_warranty: Mapped[str | None] = mapped_column(Text)
 
     liens_seizures: Mapped[str | None] = mapped_column(Text)
-    accident_records: Mapped[int | None] = mapped_column(Integer)
+    # True when `condition.accident.recordView` is true — i.e. a vehicle
+    # history report is available for this listing on the Encar page.
+    # Not an accident count. See encar-open-questions.md for why this is
+    # boolean and why real insurance history is not in this API.
+    accident_report_available: Mapped[bool | None] = mapped_column(Boolean)
     plate_number: Mapped[str | None] = mapped_column(Text)
 
     price_krw: Mapped[int | None] = mapped_column(BigInteger)

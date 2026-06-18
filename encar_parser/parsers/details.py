@@ -48,7 +48,12 @@ class CarData:
     import_type_ru: str | None = None
     manufacturer_warranty: str | None = None
     liens_seizures: str | None = None
-    accident_records: int | None = None
+    # True if a vehicle history report is available for this listing on the
+    # Encar page (from `condition.accident.recordView`). NOT an accident count.
+    # Encar's API does not expose the actual insurance history through this
+    # endpoint — `condition.insurance` is null. For real accident history
+    # the listing page must be scraped (see encar-open-questions.md).
+    accident_report_available: bool | None = None
     plate_number: str | None = None
     price_krw: int | None = None
     photo_urls: list[str] = field(default_factory=list)
@@ -125,6 +130,8 @@ def _parse_legacy(payload: dict, encar_id: int, brand: str, model: str) -> CarDa
     if liens or seizures:
         liens_seizures = f"{liens or '0건'}·{seizures or '0건'}"
 
+    legacy_count = _to_int(car.get("accidentRecords"))
+
     photos = car.get("photos") or []
     if not isinstance(photos, list):
         photos = []
@@ -147,7 +154,9 @@ def _parse_legacy(payload: dict, encar_id: int, brand: str, model: str) -> CarDa
         import_type_ru=translate_import_type(import_orig) if import_orig else None,
         manufacturer_warranty=car.get("manufacturerWarranty"),
         liens_seizures=liens_seizures,
-        accident_records=_to_int(car.get("accidentRecords")),
+        # Legacy shape stored an integer count; collapse to bool for the new
+        # field. Any non-zero count means "a record exists".
+        accident_report_available=(legacy_count > 0) if legacy_count is not None else None,
         plate_number=car.get("vehicleNo"),
         price_krw=_to_int(car.get("price")),
         photo_urls=[str(p) for p in photos if isinstance(p, str)],
@@ -180,10 +189,11 @@ def _parse_real(payload: dict, encar_id: int, brand: str, model: str) -> CarData
     liens_seizures = f"{pledge_count}건·{seizing_count}건"
 
     accident = _as_dict(condition.get("accident"))
-    # Legacy test fixture uses raw integer counts; the real API uses booleans.
-    # recordView=True means "at least one accident record"; resumeView=True
-    # means the record includes a repair/resume entry — still one incident.
-    accident_records = 1 if accident.get("recordView") else 0
+    # recordView=True means "a vehicle history report is available on the
+    # listing page". It is NOT an accident count — Encar's API does not
+    # expose real insurance history in this endpoint. The field was renamed
+    # in Phase 1 to reflect its actual semantics. See encar-open-questions.md.
+    accident_report_available = bool(accident.get("recordView"))
 
     photos = payload.get("photos") or []
     if not isinstance(photos, list):
@@ -221,7 +231,7 @@ def _parse_real(payload: dict, encar_id: int, brand: str, model: str) -> CarData
         import_type_ru=translate_import_type(import_orig) if import_orig else None,
         manufacturer_warranty=warranty.get("companyName"),
         liens_seizures=liens_seizures,
-        accident_records=accident_records,
+        accident_report_available=accident_report_available,
         plate_number=plate,
         price_krw=price_krw,
         photo_urls=photo_urls,

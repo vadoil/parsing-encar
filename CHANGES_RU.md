@@ -182,3 +182,44 @@ top-level ключи ответа.
 
 **Tests: без изменений (правок кода не было). Phase 1 приостановлена —
 требуется пересмотр из-за находки про `condition.insurance`.**
+
+## Фаза 1 — честная семантика аварийности (коммит docs/encar + alembic 0002 + parsers/models)
+
+**Проблема:** старая колонка `accident_records: int` (0/1) в `cars` вводила
+в заблуждение — 29/30 BMW X5 G05 в ground-truth имели значение 1, что
+создавало впечатление «96.7% машин с ДТП». На самом деле
+`condition.accident.recordView` — это флаг «отчёт истории доступен»,
+а не счётчик аварий.
+
+**Гипотеза «реальные ДТП в `condition.insurance`» — неверна:** insurance
+в этом endpoint всегда `null`. API Encar просто не возвращает страховую
+историю через `/v1/readside/vehicle/{id}`.
+
+### Что сделано (минимальная версия — по согласованию)
+1. **`CarData.accident_records: int | None`** → **`accident_report_available: bool | None`** в
+   `encar_parser/parsers/details.py`. Legacy `accidentRecords: 376` (int) сворачивается в `True`,
+   новый `recordView: bool` используется напрямую.
+2. **`Car` model** в `encar_parser/db/models.py` — тип `Integer` → `Boolean`.
+3. **Alembic миграция `0002_accident_report_available.py`** — rename column
+   + cast Integer→Boolean с приведением `0 → False`, `!=0 → True`, NULL остаётся NULL.
+4. **`pipeline.py`** — `upsert_car` использует новое имя.
+5. **`output/build_export.py`** — CSV-колонка `accident_record` → `accident_report_available`.
+6. **Тесты** — 3 новых на фикстурах из `output/_details.json`:
+   - `test_real_recordview_true_yields_report_available_true` (29/30 → True)
+   - `test_real_recordview_false_yields_report_available_false` (1/30 → False)
+   - `test_real_condition_insurance_is_null_in_all_samples` (regression guard)
+   Плюс обновлены 2 существующих теста: `test_parse_car_detail_full`
+   (`accident_records == 376` → `accident_report_available is True`) и
+   `test_parse_car_detail_real_api_shape` (аналогично).
+
+### Что НЕ сделано (намеренно)
+- **Не добавлены колонки** `insurance_accident_my/other`, `insurance_total_loss`,
+  `insurance_flood`, `insurance_theft`, `owner_changes` — нет источника данных
+  в API. Зафиксировано в `encar-open-questions.md` (2026-06-18).
+
+### Приёмка
+- На 30 BMW X5: 29 → `accident_report_available=True`, 1 → `False` (ID 40690603).
+  Поле честно описывает доступность отчёта, а не аварийность.
+- `uv run pytest -m "not live"`: **125 passed, 2 deselected** (+3 новых).
+- `uv run ruff check .`: 46 ошибок (без изменений от baseline до Фазы 1).
+- `uv run mypy encar_parser/`: 6 ошибок (без изменений от baseline).
