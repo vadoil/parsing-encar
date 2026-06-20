@@ -29,8 +29,13 @@ th { background: #f3f4f6; font-size: 12px; font-weight: 600;
 tr:last-child td { border-bottom: 0; }
 tr:hover td { background: #fafbfc; }
 td.id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: #6b7280; }
+td.thumb a { display: block; line-height: 0; }
 td.thumb img { width: 120px; height: 90px; object-fit: cover; border-radius: 4px;
-               background: #eef0f3; display: block; }
+               background: #eef0f3; display: block; transition: opacity .12s; }
+td.thumb a:hover img { opacity: .82; }
+td.thumb .no-photo { width: 120px; height: 90px; background: #eef0f3; border-radius: 4px;
+                     display: flex; align-items: center; justify-content: center;
+                     color: #9ca3af; font-size: 11px; }
 td.brand { font-weight: 600; }
 td.price-krw { font-weight: 700; color: #b91c1c; white-space: nowrap; }
 td.price-rub { color: #4b5563; white-space: nowrap; font-size: 13px; }
@@ -82,7 +87,13 @@ td.encar a:hover { text-decoration: underline; }
   {% for c in cars %}
     <tr>
       <td class="thumb">
-        {% if c.thumb_src %}<img src="{{ c.thumb_src }}" width="120" loading="lazy" alt="Фото {{ c.encar_id }}">{% else %}<span class="muted">—</span>{% endif %}
+        {% if c.thumb_src %}
+          <a href="{{ c.thumb_src }}" target="_blank" rel="noopener" title="Открыть фото {{ c.encar_id }} в полном размере">
+            <img src="{{ c.thumb_src }}" width="120" loading="lazy" alt="Фото {{ c.encar_id }}">
+          </a>
+        {% else %}
+          <div class="no-photo">нет фото</div>
+        {% endif %}
       </td>
       <td class="id">{{ c.encar_id }}</td>
       <td class="brand">{{ c.brand }}</td>

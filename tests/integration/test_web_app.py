@@ -104,6 +104,44 @@ async def test_index_thumbnails_use_img_proxy(client):
     assert body.count('<img src="/img?src=') == 2
     # The src must be urlencoded ci.encar.com URL.
     assert "ci.encar.com%2Fcarpicture06%2Fpic4206%2F42063010_042.jpg" in body
+    # The thumbnail <img> must be wrapped in an <a> for click-to-open.
+    # We check that the link href is the same /img?src=... (browser will
+    # navigate to it and render the full-size JPEG in a new tab).
+    assert body.count('<a href="/img?src=') >= 2
+    assert 'target="_blank"' in body
+
+
+@pytest.mark.asyncio
+async def test_index_shows_placeholder_when_no_photos():
+    """Cars with empty photo_urls must show 'нет фото' instead of a broken <img>."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    async with Session() as s:
+        s.add(Car(
+            encar_id=88888888,
+            brand="BMW", model="X5 (G05)",
+            year_month=date(2024, 1, 1), mileage_km=1000,
+            fuel_ru="Бензин", fuel_original="가솔린",
+            transmission_ru="Автомат", transmission_orig="오토",
+            color_ru="Белый", color_original="흰색",
+            price_krw=10_000_000,
+            photo_urls=[],   # no photos
+            encar_detail_url=None,
+            last_seen_at=datetime.now(UTC),
+        ))
+        await s.commit()
+
+    app = create_app(sessionmaker=Session)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        body = (await ac.get("/")).text
+
+    assert "нет фото" in body
+    # The car row should NOT have an <img> tag (placeholder, not a broken image).
+    assert "<img" not in body.split("</thead>")[1]  # check only the tbody
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

@@ -977,6 +977,65 @@ async def run_model(
 
 ---
 
+## 12. Деплой на сервер
+
+Серверный путь — **`/opt/encar`**, **не** git-репозиторий. Синхронизируем rsync'ом с мака, **обязательно** запускаем миграции после каждой выкатки (иначе web-контейнер падает с `UndefinedColumnError`, реальный кейс: `accident_report_available` против старого `accident_records`).
+
+### 1. Синхронизация файлов (с мака)
+
+```bash
+rsync -av --exclude='.env' --exclude='.venv' --exclude='.git' \
+  --exclude='__pycache__' --exclude='.mypy_cache' --exclude='.ruff_cache' \
+  --exclude='.pytest_cache' --exclude='*.pyc' \
+  "/Users/mac/ClaudeProjects/parsing encar/"  user@vps:/opt/encar/
+```
+
+- `--exclude='.env'` — **load-bearing**: не даёт затоптать серверный `.env` с реальным `DB_PASSWORD`.
+- `user@vps` — твой SSH-алиас; не хардкодим.
+- После rsync на сервере сразу делаем шаг 2 (миграции), иначе web не стартанёт.
+
+### 2. Миграции (на сервере, **обязательно**)
+
+```bash
+ssh user@vps 'cd /opt/encar && docker compose exec -T web uv run --no-sync alembic upgrade head'
+```
+
+Это **не опционально**. Если код ссылается на колонку, которой ещё нет в БД (например, переименовали `accident_records` → `accident_report_available`), web-контейнер упадёт на первом же запросе с `UndefinedColumnError`.
+
+### 3. Перезапуск web
+
+```bash
+ssh user@vps 'cd /opt/encar && docker compose up -d --build web'
+```
+
+Парсер не поднимаем — он отдельно, и если он OOM-ит (был такой кейс), не блокирует витрину.
+
+### 4. Smoke-test после выкатки
+
+```bash
+ssh user@vps 'cd /opt/encar && docker compose ps'                            # web + postgres Up
+ssh user@vps 'cd /opt/encar && docker compose logs --tail=20 web'              # без DB-ошибок
+ssh -L 8090:127.0.0.1:8090 user@vps                                          # туннель
+curl -s http://127.0.0.1:8090/ | grep -oE 'Машин в БД: <strong>[0-9]+'        # счётчик
+curl -s -o /dev/null -w "%{http_code}\n" \
+  "http://127.0.0.1:8090/img?src=https://img.encar.com/carpicture01/pic4181/41815032_003.jpg"
+                                                                              # 200 (прокси сам подменит img→ci)
+```
+
+### Биндинг портов (безопасность)
+
+- **web**: проброс только `127.0.0.1:8090:8090` в `docker-compose.yml`. Снаружи порт **закрыт**, смотрим через SSH-туннель (`ssh -L 8090:127.0.0.1:8090 user@vps`).
+- **postgres**: маппинг портов в compose **полностью убран** (`expose: ["5432"]` для внутренней сети). Контейнеры ходят к нему как `postgres:5432`. Снаружи 5432 закрыт.
+
+### Что НЕ коммитим в репо
+
+- `.env` (на сервере — священный, с реальным `DB_PASSWORD`)
+- `output/encar_export.html`, `encar_export.csv`, `encar_export.jsonld.json` (генерируемые)
+- `output/_details.json`, `output/_raw_3pages.json` (кэш прогонов)
+- `output/photos/` (локальное зеркало фоток, если есть)
+
+---
+
 ## Конец отчёта
 
 Файл `PROJECT_REPORT.md` создан. Содержит 11 секций + 3 полных блоков кода (`encar_url.py`, `fetchers/api.py`, `pipeline.py`). Все секреты замаскированы (их в репо и нет — есть только пустые плейсхолдеры). Картинки/фото не читались — сканировались только `.py`, `.yaml`, `.toml`, `.ini`, `.sh`, `Dockerfile`, `Makefile`, `*.md`, `*.json`. Без запуска кода, без модификации файлов.

@@ -21,7 +21,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -32,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from encar_parser.config import get_settings
 from encar_parser.db.models import Car
 from encar_parser.db.session import get_sessionmaker as _prod_sessionmaker
+from encar_parser.photos import first_photo_proxy_src
 from encar_parser.translations import translate_color
 from encar_parser.web.img_proxy import ProxyError, fetch_image
 
@@ -68,12 +68,6 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
             return None
         return int(round(krw * settings.krw_to_rub_rate))
 
-    def _thumb_src(photo_urls: list[str] | None) -> str | None:
-        if not photo_urls:
-            return None
-        first = photo_urls[0]
-        return f"/img?src={quote(first, safe='')}"
-
     async def _load_cars(s: AsyncSession) -> tuple[list[dict[str, Any]], datetime | None]:
         """Pull the most-recent cars and the latest ``last_seen_at``.
 
@@ -107,7 +101,7 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
                 # value if color_original is missing.
                 "color_ru": (translate_color(c.color_original) if c.color_original else c.color_ru),
                 "encar_detail_url": c.encar_detail_url,
-                "thumb_src": _thumb_src(c.photo_urls),
+                "thumb_src": first_photo_proxy_src(c.photo_urls),
             })
         return rows, last_seen
 
