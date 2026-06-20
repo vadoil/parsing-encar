@@ -39,7 +39,7 @@ def _detail_payload() -> dict:
             "seizures": "0건",
             "accidentRecords": 0,
             "price": "128500000",
-            "photos": ["https://img.encar.com/x.jpg"],
+            "photos": ["https://ci.encar.com/x.jpg"],
         }
     }
 
@@ -121,7 +121,7 @@ def _detail_for_id(encar_id: int) -> dict:
             "seizures": "0건",
             "accidentRecords": 0,
             "price": "128500000",
-            "photos": ["https://img.encar.com/x.jpg"],
+            "photos": ["https://ci.encar.com/x.jpg"],
         }
     }
 

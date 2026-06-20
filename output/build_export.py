@@ -7,11 +7,13 @@ Steps:
 4. Emit HTML with main photo + 3-thumb strip + "View on EncAr" button.
 
 Photo handling:
-- img.encar.com is unreachable from this shell (SSL handshake times out),
-  so we embed remote URLs directly. They load fine in a normal browser.
-- `download_photos.py` in the same folder is a separate, standalone script
-  the user can run from a machine where img.encar.com works to mirror the
-  images locally; re-running build_export.py will then auto-pick them up.
+- Photos live on `ci.encar.com` (the actual photo CDN). `img.encar.com` is
+  filtered on some networks and is NOT a working host — we hit that bug on
+  2026-06-20; see encar-open-questions.md / encar-progress.md.
+- We embed remote URLs from ci.encar.com directly. They load in a browser.
+- `download_photos.py` in the same folder mirrors them locally into
+  `output/photos/{carid}/`; re-running build_export.py then auto-picks up
+  the local copies and uses relative `photos/...` paths in CSV/HTML.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ CSV_PATH = HERE / "encar_export.csv"
 HTML_PATH = HERE / "encar_export.html"
 JSONLD_PATH = HERE / "encar_export.jsonld.json"
 
-IMG_BASE = "https://img.encar.com"
+IMG_BASE = "https://ci.encar.com"  # photo CDN (img.encar.com is filtered)
 ENCAR_VIEW_URL = "https://www.encar.com/dc/dc_carsearchview.do?carid={carid}"
 ENCAR_DETAIL_URL = "https://fem.encar.com/cars/detail/{carid}"
 
@@ -311,7 +313,7 @@ def build_html(sample: list[dict], details: dict[str, dict]) -> None:
 <footer>
   Источник: <a href="https://www.encar.com">encar.com</a> ·
   API: api.encar.com/search/car/list/general · detail: /v1/readside/vehicle/{{id}} ·
-  Фото: img.encar.com (для локальной копии запустите <code>download_photos.py</code>)
+  Фото: ci.encar.com (для локальной копии запустите <code>download_photos.py</code>)
 </footer>
 {chr(10).join(lightboxes)}
 </body>

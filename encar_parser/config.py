@@ -41,6 +41,21 @@ class Settings(BaseSettings):
     max_pages: int = 200
     page_size: int = 20
 
+    # ── Web viewer ────────────────────────────────────────────────────────
+    # KRW → RUB rate used in the web table. 0.048 ≈ реальный курс начала
+    # 2026. Позже заменим на ежедневную таблицу курсов; до тех пор это
+    # константа, явно подписанная в UI.
+    krw_to_rub_rate: float = 0.048
+    # HTTP port for the web viewer (uvicorn). Used by Dockerfile / compose.
+    web_port: int = 8090
+    # Image proxy tunables. Cache is per-process in-memory; it survives across
+    # requests but NOT across container restarts (that's fine — encar URLs are
+    # stable and the proxy will re-fetch on first hit).
+    img_proxy_timeout_sec: float = 10.0
+    img_proxy_cache_max_entries: int = 2000
+    img_proxy_cache_ttl_sec: int = 3600
+    img_proxy_allowed_hosts: tuple[str, ...] = ("ci.encar.com", "img.encar.com")
+
 
 _settings: Settings | None = None
 

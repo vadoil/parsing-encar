@@ -203,8 +203,10 @@ def _parse_real(payload: dict, encar_id: int, brand: str, model: str) -> CarData
         if isinstance(p, dict) and p.get("path"):
             path = str(p["path"])
             # Paths come as /carpicture03/pic4213/42131435_001.jpg — make absolute.
+            # Hosted on ci.encar.com (img.encar.com is filtered / unreachable from
+            # some networks; ci.encar.com is the working CDN for photo binaries).
             photo_urls.append(
-                path if path.startswith("http") else f"https://img.encar.com{path}"
+                path if path.startswith("http") else f"https://ci.encar.com{path}"
             )
 
     # advertisement.price is in 만원 (10,000 KRW). Convert to KRW.

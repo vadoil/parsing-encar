@@ -1,8 +1,12 @@
 """Download all photos referenced in _details.json to output/photos/{carid}/.
 
-Run this from a machine where img.encar.com is reachable. After it finishes,
-re-run `build_export.py` — it auto-detects locally-mirrored files and uses
-relative `photos/...` paths in CSV/HTML instead of remote URLs.
+Run this once to mirror every photo referenced in `_details.json` into
+`output/photos/{carid}/`. After it finishes, re-run `build_export.py` —
+it auto-detects locally-mirrored files and uses relative `photos/...`
+paths in CSV/HTML instead of remote URLs.
+
+Photos live on `ci.encar.com`. The legacy host `img.encar.com` is filtered
+on many networks and is no longer used by this pipeline.
 
 Usage:
     .venv/bin/python output/download_photos.py
@@ -21,7 +25,7 @@ HERE = Path(__file__).parent
 DETAILS_PATH = HERE / "_details.json"
 PHOTOS_DIR = HERE / "photos"
 
-IMG_BASE = "https://img.encar.com"
+IMG_BASE = "https://ci.encar.com"  # photo CDN (img.encar.com is filtered)
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 HEADERS = {

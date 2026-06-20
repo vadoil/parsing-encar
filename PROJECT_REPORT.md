@@ -112,7 +112,7 @@
 ├── models.yaml                     # конфиг поисковых фильтров (3 модели, в т.ч. BMW X5 G05)
 ├── output/
 │   ├── build_export.py             # CSV + HTML + JSON-LD экспорт из кеша
-│   ├── download_photos.py          # зеркало img.encar.com в output/photos/{carid}/
+│   ├── download_photos.py          # зеркало ci.encar.com в output/photos/{carid}/
 │   ├── encar_export.csv            # ← ГЕНЕРИРУЕТСЯ, в .gitignore
 │   ├── encar_export.html           # ← ГЕНЕРИРУЕТСЯ, в .gitignore
 │   └── encar_export.jsonld.json    # ← ГЕНЕРИРУЕТСЯ, в .gitignore
@@ -221,7 +221,7 @@
 |---|---|---|
 | **Список объявлений** | `https://api.encar.com/search/car/list/general?count=true&q=<S-expr>&sr=<sort\|off\|limit>` | GET |
 | **Карточка авто** | `https://api.encar.com/v1/readside/vehicle/{encar_id}` | GET |
-| **Фото** | `https://img.encar.com{path}` (например `/carpicture03/pic4213/42131435_001.jpg`) | GET |
+| **Фото** | `https://ci.encar.com{path}` (например `/carpicture03/pic4213/42131435_001.jpg`) | GET |
 | **Фронтенд (референс для Referer)** | `https://www.encar.com/fc/fc_carsearchlist.do?carType=for#!{action}` | GET |
 | **Ссылка на карточку (для UI)** | `https://fem.encar.com/cars/detail/{id}` | — (генерируется, не фетчится) |
 | **Кнопка "Открыть на EncAr"** | `https://www.encar.com/dc/dc_carsearchview.do?carid={id}` | — (генерируется) |
@@ -391,7 +391,7 @@ accident_record, pledge_count, seizing_count
 
 **3. `encar_export.jsonld.json`** — Schema.org Vehicle[] для прямого импорта
 
-**4. `output/photos/{carid}/`** — зеркало фото (если `download_photos.py` запускался на машине с доступом к `img.encar.com`)
+**4. `output/photos/{carid}/`** — зеркало фото (если `download_photos.py` запускался; источник — `ci.encar.com`)
 
 ### Источник истины для моделей
 
@@ -439,7 +439,7 @@ accident_record, pledge_count, seizing_count
 | Сервис | Назначение | Auth | Требования к сети |
 |---|---|---|---|
 | `api.encar.com` | Основной парсинг (список + детали) | Нет | Прямой HTTPS GET, корректный Referer/Origin |
-| `img.encar.com` | Скачивание фотографий | Нет | Прямой HTTPS GET, иногда CDN-фильтруется в РФ |
+| `ci.encar.com` | Скачивание фотографий | Нет | Прямой HTTPS GET, рабочий CDN (img.encar.com фильтруется) |
 | `www.encar.com` | Только для Referer-заголовка | Нет | — |
 
 ### Внешние сервисы (НЕ используются, но зарезервированы)
@@ -524,7 +524,7 @@ docker compose exec parser uv run --no-sync alembic upgrade head
 .venv/bin/python output/build_export.py
 # → encar_export.csv, .html, .jsonld.json
 
-# Скачать фото (нужен доступ к img.encar.com)
+# Скачать фото (зеркало ci.encar.com)
 .venv/bin/python output/download_photos.py
 # → output/photos/{carid}/*.jpg
 
@@ -548,7 +548,7 @@ uv run encar-parser probe bmw-x5-g05 --detail-id 42131435   # + деталь
 
 ### Известные баги / ограничения
 
-1. **`img.encar.com` заблокирован с этой машины разработки.** SSL handshake таймаутит — CDN фильтруется. Скачивание фото работает только на машинах, откуда виден `img.encar.com` (VPS в EU/US/Asia). Текущее состояние: `output/encar_export.html` использует удалённые URL, открывается в браузере нормально; `output/photos/` не наполнен.
+1. **`img.encar.com` заблокирован с этой машины разработки** (SSL handshake таймаутит — CDN фильтруется), но `ci.encar.com` работает с этой же машины (200 OK, проверено 2026-06-20). Поэтому в коде хоста фото переключили на `ci.encar.com` — это правильный CDN для бинарных фото; `img.encar.com` больше не используется пайплайном.
 
 2. **2 ошибки mypy** (известны, не блокеры, отмечены в прогрессе):
    - `encar_parser/fetchers/browser.py:24` — Playwright type annotation

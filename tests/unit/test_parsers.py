@@ -134,8 +134,8 @@ def test_parse_car_detail_full():
             "accidentRecords": 376,
             "price": "128500000",
             "photos": [
-                "https://img.encar.com/car1/42131435_001.jpg",
-                "https://img.encar.com/car1/42131435_002.jpg",
+                "https://ci.encar.com/car1/42131435_001.jpg",
+                "https://ci.encar.com/car1/42131435_002.jpg",
             ],
         }
     }

@@ -7,8 +7,12 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-encar}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # Postgres НЕ пробрасывается наружу. Контейнеры общаются с ним по
+    # внутренней docker-сети через hostname `postgres:5432`. Если когда-то
+    # понадобится psql снаружи — открывай временно через `docker compose
+    # exec postgres psql ...` либо SSH-туннель.
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U encar -d encar"]
       interval: 5s
@@ -28,6 +32,27 @@ services:
     volumes:
       - ./models.yaml:/app/models.yaml:ro
       - encar_logs:/var/log
+
+  # Web viewer — постоянно работающий FastAPI на порту 8090. Переживает
+  # выход из SSH и перезагрузку благодаря restart: unless-stopped.
+  # Не делает работы сам: только читает из postgres и проксирует фото.
+  # Порт 8090 проброшен ТОЛЬКО на 127.0.0.1 — снаружи витрина недоступна,
+  # смотрим через `ssh -L 8090:127.0.0.1:8090 user@host`.
+  web:
+    build:
+      context: .
+      target: web
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://encar:${DB_PASSWORD:-encar}@postgres:5432/encar
+      WEB_PORT: "8090"
+      WEB_WORKERS: "2"
+    ports:
+      - "127.0.0.1:8090:8090"
+    restart: unless-stopped
 
 volumes:
   pgdata:
