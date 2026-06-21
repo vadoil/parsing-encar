@@ -71,6 +71,11 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
     async def _load_cars(s: AsyncSession) -> tuple[list[dict[str, Any]], datetime | None]:
         """Pull the most-recent cars and the latest ``last_seen_at``.
 
+        Filters to ``is_primary = True`` only — duplicate listings of the
+        same physical car are hidden from the vitrine. The counter
+        (``len(rows)``) therefore reflects unique cars, not raw rows.
+        See :mod:`encar_parser.dedup` for the grouping logic.
+
         Note on colors: we re-translate from ``color_original`` at render time
         rather than trusting the stored ``color_ru``. The DB column was
         populated with whatever the parser's translation dict knew at the
@@ -81,9 +86,13 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
         """
         cars = (await s.scalars(
             select(Car)
+            .where(Car.is_primary.is_(True))
             .order_by(Car.last_seen_at.desc().nullslast(), Car.encar_id.desc())
             .limit(500)
         )).all()
+        # ``last_seen`` reflects the freshness of the DB itself (any new
+        # listing, primary or hidden duplicate) — it answers "when was the
+        # last run?", not "when was the latest visible row added?".
         last_seen = await s.scalar(select(func.max(Car.last_seen_at)))
         rows: list[dict[str, Any]] = []
         for c in cars:

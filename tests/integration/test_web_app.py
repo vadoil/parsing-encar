@@ -248,3 +248,88 @@ async def test_img_404_when_upstream_missing(client):
         mock.get("/missing.jpg").mock(return_value=Response(404))
         r = await client.get("/img?src=https://ci.encar.com/missing.jpg")
     assert r.status_code == 404
+
+
+# ── dedup: vitrine filters out hidden duplicates ───────────────────────
+
+
+@pytest.mark.asyncio
+async def test_index_hides_cars_marked_not_primary():
+    """A duplicate listing (is_primary=False) must not appear in the table."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    async with Session() as s:
+        # Primary listing — must appear in the vitrine.
+        s.add(Car(
+            encar_id=42213576, brand="BMW", model="X5 (G05)",
+            year_month=date(2025, 12, 1), mileage_km=4645,
+            color_ru="Синий", color_original="청색",
+            price_krw=133_900_000,
+            photo_urls=["https://ci.encar.com/x/a.jpg"],
+            encar_detail_url="https://fem.encar.com/cars/detail/42213576",
+            last_seen_at=datetime.now(UTC),
+            is_primary=True,
+        ))
+        # Older duplicate — dedup marked this hidden, it must NOT appear.
+        s.add(Car(
+            encar_id=42209462, brand="BMW", model="X5 (G05)",
+            year_month=date(2025, 12, 1), mileage_km=4645,
+            color_ru="Синий", color_original="청색",
+            price_krw=133_900_000,
+            photo_urls=["https://ci.encar.com/x/a.jpg"],
+            encar_detail_url="https://fem.encar.com/cars/detail/42209462",
+            last_seen_at=datetime.now(UTC),
+            is_primary=False,
+        ))
+        await s.commit()
+
+    app = create_app(sessionmaker=Session)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        body = (await ac.get("/")).text
+
+    # Primary row is shown, hidden duplicate is not.
+    assert "42213576" in body
+    # The hidden ID must not appear as a row entry — it can appear inside
+    # photo URL paths (which encode the listing's original ID), so check
+    # the more specific "details page link" rather than the bare number.
+    assert "fem.encar.com/cars/detail/42209462" not in body
+    assert "fem.encar.com/cars/detail/42213576" in body
+    # The counter reflects unique cars (1), not raw rows (2).
+    assert "Машин в БД: <strong>1</strong>" in body
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_index_count_excludes_hidden_duplicates():
+    """Three rows: two duplicates hidden, one primary → counter shows 1."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    async with Session() as s:
+        for eid, primary in [(100, True), (200, False), (300, False)]:
+            s.add(Car(
+                encar_id=eid, brand="BMW", model="X5 (G05)",
+                year_month=date(2024, 1, 1), mileage_km=10000,
+                color_ru="Белый", color_original="흰색",
+                price_krw=50_000_000,
+                photo_urls=[],
+                encar_detail_url=None,
+                last_seen_at=datetime.now(UTC),
+                is_primary=primary,
+            ))
+        await s.commit()
+
+    app = create_app(sessionmaker=Session)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        body = (await ac.get("/")).text
+
+    assert "100" in body  # primary visible
+    assert "200" not in body
+    assert "300" not in body
+    assert "Машин в БД: <strong>1</strong>" in body
+    await engine.dispose()

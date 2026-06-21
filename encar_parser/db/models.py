@@ -79,6 +79,13 @@ class Car(Base):
     photo_urls: Mapped[list[str] | None] = mapped_column(JSON)
     encar_detail_url: Mapped[str | None] = mapped_column(Text)
 
+    # True iff this row is the freshest listing of its physical car
+    # (largest ``encar_id`` within its duplicate group). The vitrine,
+    # ``/catalog`` and the CRM filter on this. See :mod:`encar_parser.dedup`.
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True,
+    )
+
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -93,6 +100,11 @@ class Car(Base):
         Index("idx_cars_brand_model", "brand", "model"),
         Index("idx_cars_year_month", "year_month"),
         Index("idx_cars_price_krw", "price_krw"),
+        # Partial index keeps the vitrine query fast: the web view only
+        # reads is_primary=True rows, and only the latest last_seen_at.
+        # Declared here so the model matches what the migration created
+        # (alembic stays the source of truth for the partial WHERE).
+        Index("idx_cars_is_primary", "is_primary", "last_seen_at"),
     )
 
 
