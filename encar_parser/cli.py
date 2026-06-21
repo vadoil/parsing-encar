@@ -20,14 +20,21 @@ from encar_parser.db.repository import (
     upsert_search_model,
 )
 from encar_parser.db.session import get_sessionmaker
+from encar_parser.dedup import run_dedup
 from encar_parser.fetchers.api import ApiFetcher
 from encar_parser.fetchers.browser import BrowserFetcher
 from encar_parser.fetchers.factory import FallbackFetcher
+from encar_parser.memlog import MemSampler
 from encar_parser.pipeline import make_list_url_for_page, run_model
 from encar_parser.scheduler import models_for_today
 from encar_parser.utils.log import get_logger, setup_logging
 from encar_parser.utils.rate_limit import RandomDelay
 from encar_parser.validate_pool import run_validate_pool
+
+# Cap the per-run error_log size so a run with thousands of failures
+# doesn't bloat the runs row in Postgres. We keep the first N and a
+# tail count of suppressed errors.
+MAX_ERROR_LOG_ENTRIES = 50
 
 log = get_logger(__name__)
 app = typer.Typer(help="Encar parser CLI")
@@ -105,95 +112,155 @@ def build_url_from_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.command()
-def run() -> None:
+def run(
+    max_models: int = typer.Option(
+        0, "--max-models",
+        help="Cap the run to this many models (0 = all today's models). "
+             "Used for memory-bounded test runs.",
+    ),
+    max_pages: int = typer.Option(
+        0, "--max-pages",
+        help="Override settings.max_pages for this run. Useful for fast "
+             "test runs that just want a few pages per model.",
+    ),
+) -> None:
     """Run today's scheduled models."""
     setup_logging()
-    asyncio.run(_run_async())
+    asyncio.run(_run_async(max_models=max_models, max_pages=max_pages))
 
 
-async def _run_async() -> None:
+async def _run_async(*, max_models: int = 0, max_pages: int = 0) -> None:
     settings = get_settings()
     Session = get_sessionmaker()
-    async with Session() as session:
-        all_models = await get_enabled_models(session)
-        today_models = models_for_today(all_models, datetime.now(UTC).date())
-        if not today_models:
-            typer.echo("No models scheduled for today.")
-            return
-
-        run_record = Run(
-            started_at=datetime.now(UTC),
-            models_planned=len(today_models),
-            models_done=0,
-            cars_fetched=0,
-            cars_failed=0,
-            error_log=[],
-        )
-        session.add(run_record)
-        await session.commit()
-        await session.refresh(run_record)
-
-        async with ApiFetcher() as api:
-            # BrowserFetcher is the fallback when ApiFetcher hits a 403/429.
-            # Construct it lazily — if Playwright or Chromium isn't installed,
-            # the run should still complete (with API-only fetches), not die
-            # in the `async with` line.
-            browser: BrowserFetcher | None = None
-            try:
-                browser = BrowserFetcher()
-                await browser.__aenter__()
-            except Exception as e:
-                log.warning(
-                    "browser_fetcher_unavailable",
-                    error=str(e),
-                    hint="run `playwright install chromium --with-deps` to enable fallback",
+    mem = MemSampler(interval_sec=60.0, label="run")
+    mem.start()
+    effective_max_pages = max_pages or settings.max_pages
+    if max_pages:
+        log.info("max_pages_override", before=settings.max_pages, after=max_pages)
+    try:
+        async with Session() as session:
+            all_models = await get_enabled_models(session)
+            today_models = models_for_today(all_models, datetime.now(UTC).date())
+            if max_models and len(today_models) > max_models:
+                log.info(
+                    "max_models_cap",
+                    before=len(today_models),
+                    after=max_models,
+                    hint="--max-models set; truncating today's slice",
                 )
-                browser = None
+                today_models = today_models[:max_models]
+            if not today_models:
+                typer.echo("No models scheduled for today.")
+                return
 
-            if browser is not None:
-                fetcher: Fetcher = FallbackFetcher(primary=api, secondary=browser)
-            else:
-                fetcher = api  # type: ignore[assignment]
-            request_delay = RandomDelay(settings.min_delay_sec, settings.max_delay_sec)
+            run_record = Run(
+                started_at=datetime.now(UTC),
+                models_planned=len(today_models),
+                models_done=0,
+                cars_fetched=0,
+                cars_failed=0,
+                error_log=[],
+            )
+            session.add(run_record)
+            await session.commit()
+            await session.refresh(run_record)
 
-            try:
-                for sm in today_models:
-                    try:
-                        count = await run_model(
-                            sm,
-                            fetcher=fetcher,
-                            session=session,
-                            list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # type: ignore[misc]  # noqa: E501
-                            detail_url_template=settings.api_detail_template,
-                            request_delay=request_delay,
-                            max_pages=settings.max_pages,
-                        )
-                        run_record.models_done += 1
-                        run_record.cars_fetched += count
-                    except Exception as e:
-                        run_record.cars_failed += 1
-                        log.error("model_failed", slug=sm.slug, error=str(e))
-                        if run_record.error_log is None:
-                            run_record.error_log = []
-                        run_record.error_log.append({"slug": sm.slug, "error": str(e)})
-                    # Pause between models
-                    await asyncio.sleep(random.uniform(
-                        settings.min_model_delay_sec, settings.max_model_delay_sec
-                    ))
-            finally:
+            suppressed_errors = 0  # count beyond MAX_ERROR_LOG_ENTRIES
+
+            async with ApiFetcher() as api:
+                # BrowserFetcher is the fallback when ApiFetcher hits a 403/429.
+                # Construct it lazily — if Playwright or Chromium isn't installed,
+                # the run should still complete (with API-only fetches), not die
+                # in the `async with` line.
+                browser: BrowserFetcher | None = None
+                try:
+                    browser = BrowserFetcher()
+                    await browser.__aenter__()
+                except Exception as e:
+                    log.warning(
+                        "browser_fetcher_unavailable",
+                        error=str(e),
+                        hint="run `playwright install chromium --with-deps` to enable fallback",
+                    )
+                    browser = None
+
                 if browser is not None:
-                    await browser.__aexit__(None, None, None)
+                    fetcher: Fetcher = FallbackFetcher(primary=api, secondary=browser)
+                else:
+                    fetcher = api  # type: ignore[assignment]
+                request_delay = RandomDelay(settings.min_delay_sec, settings.max_delay_sec)
 
-        run_record.finished_at = datetime.now(UTC)
-        await session.commit()
+                try:
+                    for sm in today_models:
+                        try:
+                            count = await run_model(
+                                sm,
+                                fetcher=fetcher,
+                                session=session,
+                                list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),  # type: ignore[misc]  # noqa: E501
+                                detail_url_template=settings.api_detail_template,
+                                request_delay=request_delay,
+                                max_pages=effective_max_pages,
+                            )
+                            run_record.models_done += 1
+                            run_record.cars_fetched += count
+                        except Exception as e:
+                            run_record.cars_failed += 1
+                            log.error("model_failed", slug=sm.slug, error=str(e))
+                            if run_record.error_log is None:
+                                run_record.error_log = []
+                            if len(run_record.error_log) < MAX_ERROR_LOG_ENTRIES:
+                                run_record.error_log.append(
+                                    {"slug": sm.slug, "error": str(e)}
+                                )
+                            else:
+                                suppressed_errors += 1
+                        # Drop everything the ORM still holds between models.
+                        # Identity map uses weak refs so this is mostly a
+                        # belt-and-braces measure, but it also releases any
+                        # strongly-referenced Car objects (e.g. inside
+                        # `run_record` or local closures).
+                        session.expunge_all()
+                        # Pause between models
+                        await asyncio.sleep(random.uniform(
+                            settings.min_model_delay_sec, settings.max_model_delay_sec
+                        ))
+                finally:
+                    if browser is not None:
+                        await browser.__aexit__(None, None, None)
 
-        typer.echo(json.dumps({
-            "run_id": run_record.id,
-            "models_planned": run_record.models_planned,
-            "models_done": run_record.models_done,
-            "cars_fetched": run_record.cars_fetched,
-            "cars_failed": run_record.cars_failed,
-        }, ensure_ascii=False, indent=2))
+            run_record.finished_at = datetime.now(UTC)
+            await session.commit()
+
+            # Replay dedup so freshly-added listings get folded into the
+            # existing duplicate groups — and so any newcomer with a higher
+            # ``encar_id`` correctly steals the primary slot from a row the
+            # last pass marked primary.
+            dedup_report = await run_dedup(session)
+            await session.commit()
+            log.info(
+                "dedup_done",
+                duplicate_groups=dedup_report.duplicate_groups,
+                rows_hidden=dedup_report.rows_hidden,
+                rows_primary=dedup_report.rows_primary,
+            )
+
+            summary = mem.stop()
+            typer.echo(json.dumps({
+                "run_id": run_record.id,
+                "models_planned": run_record.models_planned,
+                "models_done": run_record.models_done,
+                "cars_fetched": run_record.cars_fetched,
+                "cars_failed": run_record.cars_failed,
+                "suppressed_errors": suppressed_errors,
+                "dedup": dedup_report.as_dict(),
+                "memory": summary.as_dict(),
+            }, ensure_ascii=False, indent=2))
+    finally:
+        # If we exited via exception, mem.stop() wasn't called — flush now
+        # so the peak still lands in encar.log.
+        if mem._thread is not None and mem._thread.is_alive():
+            mem.stop()
 
 
 @app.command()
@@ -203,6 +270,49 @@ def migrate() -> None:
     setup_logging()
     result = subprocess.run(["alembic", "upgrade", "head"], check=False)
     raise typer.Exit(result.returncode)
+
+
+@app.command()
+def dedup(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of human text"),
+) -> None:
+    """Collapse duplicate listings: mark the freshest car in each group
+    ``is_primary = True`` and hide the rest from the vitrine.
+
+    A duplicate is detected by:
+
+    1. (brand, model, year_month, mileage_km, color_original) all
+       non-NULL and matching — the primary signal.
+    2. Identical ``photo_urls`` sets — fallback for rows with missing
+       key fields.
+
+    Within each group the row with the largest ``encar_id`` wins
+    (``is_primary = True``). The pass always recomputes from current
+    data, so it's safe to re-run after every parse — newcomers with a
+    higher ``encar_id`` correctly steal the primary slot from older
+    duplicates.
+
+    Idempotent: running twice in a row yields the same state.
+    """
+    setup_logging()
+    asyncio.run(_dedup_async(json_output=json_output))
+
+
+async def _dedup_async(*, json_output: bool) -> None:
+    Session = get_sessionmaker()
+    async with Session() as session:
+        report = await run_dedup(session)
+        await session.commit()
+    payload = report.as_dict()
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        typer.echo(
+            "dedup done — "
+            f"duplicate_groups={payload['duplicate_groups']}  "
+            f"rows_hidden={payload['rows_hidden']}  "
+            f"rows_primary={payload['rows_primary']}"
+        )
 
 
 @app.command()

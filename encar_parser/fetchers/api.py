@@ -45,8 +45,18 @@ class ApiFetcher:
 
     async def __aenter__(self) -> ApiFetcher:
         timeout = httpx.Timeout(self._settings.request_timeout_sec)
+        # Cap the connection pool. Default httpx keeps up to 100 keepalive
+        # connections — a hard upper bound for the parser (one process, no
+        # concurrency in the pipeline), which is enough for the rate-limit
+        # ceiling (1200/hour) and bounds memory if the host kernel starts
+        # pressuring the container.
+        limits = httpx.Limits(
+            max_connections=20,
+            max_keepalive_connections=10,
+        )
         self._client = httpx.AsyncClient(
             timeout=timeout,
+            limits=limits,
             follow_redirects=True,
             headers={
                 "Accept": "application/json, text/plain, */*",

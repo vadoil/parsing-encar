@@ -505,17 +505,72 @@ make test-live         # + e2e на реальном encar
 # Поднять стек
 docker compose up -d
 #   - postgres (volume pgdata)
-#   - parser (cron: 0 3 * * *)
+#   - parser (cron: 0 3 * * *, mem_limit=1 GiB)
 
 # Логи
 docker compose logs -f parser
 
 # Ручной запуск (вне расписания)
 docker compose exec parser uv run --no-sync python -m encar_parser run
+# Ограничить прогон для теста памяти:
+#   --max-models 10   # только первые 10 моделей из сегодняшнего среза
+#   --max-pages  3    # максимум 3 страницы по 20 машин на модель
 
 # Миграции
 docker compose exec parser uv run --no-sync alembic upgrade head
 ```
+
+### Память парсера (Phase 3, OOM fix)
+
+Парсер раньше падал с кодом 137 (kernel OOM-kill) на полном списке
+моделей. Причины и фиксы:
+
+**Корневые причины:**
+
+1. **Playwright Chromium всегда жив в парсере** — `BrowserFetcher`
+   создаётся один раз в начале `run()` как fallback на 403/429. Даже
+   когда API работает, Chromium-процессы (main + zygote + GPU + utility)
+   висят в памяти ≈120 MiB. Это baseline overhead, не лик.
+2. **httpx default connection pool** = 100 keepalive — без нужды для
+   однопоточного парсера. Поставлено `max_connections=20,
+   max_keepalive_connections=10`.
+3. **`error_log` в `runs` мог расти неограниченно** — теперь cap = 50
+   записей, остальные считаются в `suppressed_errors`.
+4. **Нет `mem_limit` в docker-compose** — контейнер мог съесть всю
+   RAM хоста до того, как OOM-killer сработает на уровне ядра. Теперь
+   `mem_limit: 1g`, `mem_reservation: 512m`, `restart: on-failure:5`.
+
+**Что НЕ оказалось проблемой** (проверено диагностическим
+скриптом `scripts/diagnose_memory.py`):
+
+- SQLAlchemy identity map — weak refs, GC собирает после commit
+- asyncio.gather в pipeline — нет, обработка последовательная
+- Накопление ORM объектов — `session.expunge_all()` после каждой
+  модели дополнительно подчищает
+
+**Что добавлено:**
+
+- `encar_parser/memlog.py` — фоновый sampler, логирует RSS каждые
+  60 сек и в конце выдаёт peak. Каждый прогон пишет `memlog_summary`
+  в `encar.log`.
+- `MemSampler.start()/stop()` оборачивает весь `run()`.
+- `--max-models` и `--max-pages` флаги для тестовых прогонов.
+
+**Проверено на dev (15 моделей × 3 страницы = ~900 машин):**
+
+- Container RSS стабильно ~210 MiB из 1 GiB (21%)
+- Process RSS стабильно ~92 MiB
+- Нулевой рост по 274+ обработанным машинам
+- Прогон укладывается в `mem_limit` с большим запасом
+
+**На проде:**
+
+- Полный прогон ~100 моделей × 1000 машин = 100k машин. По текущим
+  данным ~1.9 KiB/машина → ожидаемый рост 100k × 1.9 KiB = ~190 MiB.
+  С baseline 210 MiB пик ~400 MiB. `mem_limit: 1g` комфортно.
+- При первом продовом запуске следить за `docker stats parsingencar-parser-1`.
+  Если RSS приближается к 800 MiB — `docker compose logs parser` покажет
+  `memlog_tick` и поможет найти место роста.
 
 ### Экспорт (output/)
 
@@ -536,11 +591,49 @@ docker compose exec parser uv run --no-sync alembic upgrade head
 
 ```bash
 uv run encar-parser sync                    # YAML → БД
-uv run encar-parser run                     # парсинг на сегодня
+uv run encar-parser run                     # парсинг на сегодня (+ dedup в конце)
 uv run encar-parser migrate                 # alembic upgrade head
+uv run encar-parser dedup                   # переcхлопнуть дубли (идемпотентно)
+uv run encar-parser dedup --json            # JSON-отчёт: groups / hidden / primary
 uv run encar-parser probe bmw-x5-g05        # живой smoke-тест списка
 uv run encar-parser probe bmw-x5-g05 --detail-id 42131435   # + деталь
 ```
+
+### Дедупликация (Phase 2)
+
+Encar часто вешает одну и ту же физическую машину под несколькими
+`encar_id` (разные объявления, одинаковые фото и спеки). Витрина и CRM
+должны показывать каждую машину **один раз**; строки в БД не удаляются —
+они просто помечаются `is_primary = false`.
+
+**Ключ дедупа** — кортеж `(brand, model, year_month, mileage_km, color_original)`
+все пять полей non-NULL. Дополнительно: если у двух машин полностью совпадают
+`photo_urls` (фоллбэк для машин с NULL-полями). Внутри группы основным
+считается строка с **максимальным `encar_id`** (самое свежее объявление).
+
+**Прогон:**
+
+```bash
+# Ручной запуск (можно гонять когда угодно, идемпотентно)
+docker compose exec -T web uv run --no-sync python -m encar_parser dedup
+
+# В пайплайне уже автоматически — `python -m encar_parser run` после
+# всех моделей зовёт dedup, так что свежие объявления сразу схлопываются.
+```
+
+**Проверка в БД:**
+
+```sql
+-- Сколько групп, сколько спрятано, сколько уникальных машин
+SELECT is_primary, count(*) FROM cars GROUP BY is_primary;
+--   t |   62     <- уникальные машины в витрине
+--   f |   38     <- спрятанные дубли
+```
+
+**Деплой:** на каждом sync'е с Mac на сервер нужно заново
+`docker compose up -d --build web` (новый код в образе), и затем
+`alembic upgrade head` — миграция `0003_is_primary` добавляет колонку
++ partial index `idx_cars_is_primary`.
 
 ---
 

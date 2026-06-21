@@ -32,6 +32,16 @@ services:
     volumes:
       - ./models.yaml:/app/models.yaml:ro
       - encar_logs:/var/log
+    # Bounded memory: parser used to OOM-kill (exit 137) on the full
+    # 100-model rotation because Playwright Chromium fallback + growing
+    # httpx pool accumulated past the host's per-container cap. 1 GiB
+    # comfortably covers the API path (~150 MiB observed) and one or two
+    # BrowserFetcher fallbacks at a time (~250 MiB each).
+    mem_limit: 1g
+    mem_reservation: 512m
+    # Retry after OOM-kill — but don't tight-loop if entrypoint crashes
+    # every restart. Cap at 5 attempts within any 5-minute window.
+    restart: on-failure:5
 
   # Web viewer — постоянно работающий FastAPI на порту 8090. Переживает
   # выход из SSH и перезагрузку благодаря restart: unless-stopped.
