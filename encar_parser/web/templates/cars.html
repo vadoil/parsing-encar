@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}EncAr — машины{% endblock %}
+{% block description %}Просмотрщик машин из БД encar-parser. Цены в ₩ и ₽, фото через прокси.{% endblock %}
+
+{% block styles %}
+td.thumb a { display: block; line-height: 0; }
+td.thumb img {
+  width: 120px; height: 90px; object-fit: cover; border-radius: 4px;
+  background: #eef0f3; display: block; transition: opacity .12s;
+}
+td.thumb a:hover img { opacity: .82; }
+td.thumb .no-photo {
+  width: 120px; height: 90px; background: #eef0f3; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  color: #9ca3af; font-size: 11px;
+}
+td.brand { font-weight: 600; }
+td.price-krw { font-weight: 700; color: #b91c1c; white-space: nowrap; }
+td.price-rub { color: #4b5563; white-space: nowrap; font-size: 13px; }
+.rate-note { font-size: 12px; color: #6b7280; }
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <h2>Машины</h2>
+    <div class="subtitle">
+      Машин в БД (is_primary=true): <strong>{{ car_count }}</strong>
+      {% if last_seen %}· обновлено: {{ last_seen.strftime("%Y-%m-%d %H:%M:%S UTC") }}{% else %}· нет данных{% endif %}
+    </div>
+    <div class="rate-note">
+      Курс: 1 ₩ ≈ {{ "%.4f"|format(krw_to_rub_rate) }} ₽
+      (константа; в будущем — ежедневная таблица).
+    </div>
+  </div>
+</section>
+
+{% if not cars %}
+  <div class="empty">
+    В БД пока нет машин с is_primary=true. Дождитесь первого прогона парсера
+    или запустите его вручную: <code>python -m encar_parser run-incremental</code>.
+  </div>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>миниатюра</th>
+      <th>id</th>
+      <th>brand</th>
+      <th>model</th>
+      <th>year_month</th>
+      <th>mileage_km</th>
+      <th>price_krw</th>
+      <th>price_rub</th>
+      <th>fuel_ru</th>
+      <th>transmission_ru</th>
+      <th>color_ru</th>
+      <th>encar</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for c in cars %}
+    <tr>
+      <td class="thumb">
+        {% if c.thumb_src %}
+          <a href="{{ c.thumb_src }}" target="_blank" rel="noopener" title="Открыть фото {{ c.encar_id }} в полном размере">
+            <img src="{{ c.thumb_src }}" width="120" loading="lazy" alt="Фото {{ c.encar_id }}">
+          </a>
+        {% else %}
+          <div class="no-photo">нет фото</div>
+        {% endif %}
+      </td>
+      <td class="id">{{ c.encar_id }}</td>
+      <td class="brand">{{ c.brand }}</td>
+      <td>{{ c.model }}</td>
+      <td>{{ c.year_month.isoformat() if c.year_month else "—" }}</td>
+      <td>{% if c.mileage_km is not none %}{{ "{:,}".format(c.mileage_km).replace(",", " ") }}{% else %}—{% endif %}</td>
+      <td class="price-krw">{% if c.price_krw is not none %}{{ "{:,}".format(c.price_krw).replace(",", " ") }} ₩{% else %}—{% endif %}</td>
+      <td class="price-rub">{% if c.price_rub is not none %}{{ "{:,}".format(c.price_rub).replace(",", " ") }} ₽{% else %}—{% endif %}</td>
+      <td>{{ c.fuel_ru or "—" }}</td>
+      <td>{{ c.transmission_ru or "—" }}</td>
+      <td>{{ c.color_ru or "—" }}</td>
+      <td>{% if c.encar_detail_url %}<a href="{{ c.encar_detail_url }}" target="_blank" rel="noopener">открыть ↗</a>{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

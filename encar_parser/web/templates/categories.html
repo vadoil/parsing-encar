@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}EncAr — категории{% endblock %}
+{% block description %}Список моделей (search_models) с количеством собранных машин и ссылкой на Encar.{% endblock %}
+
+{% block styles %}
+td.id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: #6b7280; }
+td.count { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+td.count.zero { color: #9ca3af; font-weight: 400; }
+td.actions { white-space: nowrap; }
+td.actions a { font-size: 12px; }
+td.muted { color: #9ca3af; font-size: 12px; }
+.last-run { font-size: 12px; color: #4b5563; white-space: nowrap; }
+.last-run.never { color: #9ca3af; font-style: italic; }
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <h2>Категории</h2>
+    <div class="subtitle">
+      Всего моделей: <strong>{{ total_models }}</strong> ·
+      enabled: <strong>{{ enabled_models }}</strong> ·
+      с собранными машинами: <strong>{{ with_cars }}</strong>
+    </div>
+  </div>
+</section>
+
+{% if not models %}
+  <div class="empty">В БД пока нет моделей. Запустите <code>python -m encar_parser sync</code>.</div>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>slug</th>
+      <th>бренд</th>
+      <th>модель</th>
+      <th>CarType</th>
+      <th>enabled</th>
+      <th>машин (primary)</th>
+      <th>последний прогон</th>
+      <th>эталон</th>
+      <th>открыть</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for m in models %}
+    <tr>
+      <td class="id">{{ m.id }}</td>
+      <td><code>{{ m.slug }}</code></td>
+      <td>{{ m.manufacturer or "—" }}</td>
+      <td>{{ m.name }}</td>
+      <td>
+        {% if m.car_type_code == "Y" %}<span class="badge domestic" title="국산 — domestic">Y</span>
+        {% elif m.car_type_code == "N" %}<span class="badge import" title="수입 — import">N</span>
+        {% else %}<span class="muted">?</span>{% endif %}
+      </td>
+      <td>{% if m.enabled %}<span class="badge ok">on</span>{% else %}<span class="badge off">off</span>{% endif %}</td>
+      <td class="count {% if m.cars_count == 0 %}zero{% endif %}">
+        {% if m.cars_count %}{{ "{:,}".format(m.cars_count).replace(",", " ") }}{% else %}0{% endif %}
+      </td>
+      <td class="last-run {% if not m.last_run_at %}never{% endif %}">
+        {% if m.last_run_at %}{{ m.last_run_at.strftime("%Y-%m-%d %H:%M") }}{% else %}никогда{% endif %}
+      </td>
+      <td class="muted">
+        {# TODO: сравнение с эталонным каталогом (catalog_test.xlsx) — следующим шагом #}
+        —
+      </td>
+      <td class="actions">
+        <a href="{{ m.web_url }}" target="_blank" rel="noopener" title="Открыть поиск по этой модели на Encar">на сайте ↗</a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted" style="margin-top: 12px; font-size: 12px;">
+  CarType берётся из <code>sm.car_type_code</code>; если None — отображается как «?».
+  Ссылка «на сайте» строится из <code>sm.encar_action["q"]</code> + JSON-hash (см.
+  <code>encar_parser/web/links.py</code>).
+</p>
+{% endif %}
+{% endblock %}

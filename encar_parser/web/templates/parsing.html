@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}EncAr — парсинг{% endblock %}
+{% block description %}Дашборд состояния парсинга: сколько моделей в БД, когда последний прогон, что собрано.{% endblock %}
+
+{% block styles %}
+td.id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: #6b7280; }
+td.count { text-align: right; font-variant-numeric: tabular-nums; }
+.last-run { font-size: 12px; color: #4b5563; white-space: nowrap; }
+.last-run.never { color: #9ca3af; font-style: italic; }
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <h2>Парсинг</h2>
+    <div class="subtitle">Состояние по данным Postgres. Состояние backfill-файла
+      живёт на парсер-контейнере в <code>/var/log/backfill_state.json</code> — здесь
+      мы показываем только то, что в общей БД.</div>
+  </div>
+</section>
+
+<div class="cards">
+  <div class="card">
+    <div class="label">Всего моделей</div>
+    <div class="value">{{ total_models }}<small>в search_models</small></div>
+  </div>
+  <div class="card">
+    <div class="label">Enabled</div>
+    <div class="value">{{ enabled_models }}<small>enabled=true</small></div>
+  </div>
+  <div class="card">
+    <div class="label">Disabled</div>
+    <div class="value">{{ disabled_models }}<small>enabled=false</small></div>
+  </div>
+  <div class="card">
+    <div class="label">Машин в БД</div>
+    <div class="value">{{ cars_total }}<small>cars.total</small></div>
+  </div>
+  <div class="card">
+    <div class="label">Витрина (primary)</div>
+    <div class="value">{{ cars_primary }}<small>is_primary=true</small></div>
+  </div>
+  <div class="card">
+    <div class="label">Прогонов всего</div>
+    <div class="value">{{ runs_total }}<small>runs.total</small></div>
+  </div>
+</div>
+
+<h3 style="margin-top: 24px; font-size: 16px;">Последние 10 прогонов</h3>
+{% if recent_runs %}
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>started</th>
+      <th>finished</th>
+      <th>models</th>
+      <th>cars</th>
+      <th>failed</th>
+      <th>errors (cap)</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in recent_runs %}
+    <tr>
+      <td class="id">{{ r.id }}</td>
+      <td>{{ r.started_at.strftime("%Y-%m-%d %H:%M:%S") if r.started_at else "—" }}</td>
+      <td>{{ r.finished_at.strftime("%Y-%m-%d %H:%M:%S") if r.finished_at else "—" }}</td>
+      <td class="count">{{ r.models_done }} / {{ r.models_planned }}</td>
+      <td class="count">{{ r.cars_fetched }}</td>
+      <td class="count">{{ r.cars_failed }}</td>
+      <td class="count">{{ (r.error_log or [])|length }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <div class="empty">Прогонов ещё не было. Запустите
+    <code>python -m encar_parser run-incremental</code> или <code>backfill</code>.</div>
+{% endif %}
+
+<h3 style="margin-top: 24px; font-size: 16px;">По моделям — последний прогон и сколько машин</h3>
+{% if per_model %}
+<table>
+  <thead>
+    <tr>
+      <th>slug</th>
+      <th>приоритет</th>
+      <th>enabled</th>
+      <th>последний прогон</th>
+      <th>машин (primary)</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for m in per_model %}
+    <tr>
+      <td><code>{{ m.slug }}</code></td>
+      <td class="count">{{ m.priority }}</td>
+      <td>{% if m.enabled %}<span class="badge ok">on</span>{% else %}<span class="badge off">off</span>{% endif %}</td>
+      <td class="last-run {% if not m.last_run_at %}never{% endif %}">
+        {% if m.last_run_at %}{{ m.last_run_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}{% else %}никогда{% endif %}
+      </td>
+      <td class="count">{{ m.cars_count }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <div class="empty">Нет enabled моделей.</div>
+{% endif %}
+{% endblock %}

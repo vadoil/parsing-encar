@@ -298,7 +298,7 @@ async def test_index_hides_cars_marked_not_primary():
     assert "fem.encar.com/cars/detail/42209462" not in body
     assert "fem.encar.com/cars/detail/42213576" in body
     # The counter reflects unique cars (1), not raw rows (2).
-    assert "Машин в БД: <strong>1</strong>" in body
+    assert "Машин в БД (is_primary=true): <strong>1</strong>" in body
     await engine.dispose()
 
 
@@ -331,5 +331,5 @@ async def test_index_count_excludes_hidden_duplicates():
     assert "100" in body  # primary visible
     assert "200" not in body
     assert "300" not in body
-    assert "Машин в БД: <strong>1</strong>" in body
+    assert "Машин в БД (is_primary=true): <strong>1</strong>" in body
     await engine.dispose()

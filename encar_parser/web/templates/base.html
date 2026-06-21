@@ -1,0 +1,112 @@
+{# Base layout for every page in the encar-parser CRM.
+
+   Navigation is server-rendered (no SPA, no client router). Each link
+   is a full GET request so the address bar always reflects what the
+   user is looking at — friendly for SSH-tunnelled dev work and
+   trivially bookmarkable.
+
+   No external CDN: everything ships in the image. This means the
+   viewer works offline (over SSH tunnel without internet) and there
+   are no third-party requests to leak the user's browsing.
+#}<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}EncAr — CRM{% endblock %}</title>
+<meta name="description" content="{% block description %}EncAr parser CRM — выборка машин, категории, история парсинга.{% endblock %}">
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: #f6f7f9; color: #1a1a1a;
+}
+header.topbar {
+  padding: 12px 24px;
+  background: #1a1a1a; color: #fff;
+  display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;
+}
+header.topbar h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .02em; }
+header.topbar h1 small { font-weight: 400; opacity: .6; font-size: 13px; margin-left: 8px; }
+nav.primary { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.primary a {
+  color: #d1d5db; text-decoration: none; padding: 8px 14px;
+  border-radius: 6px; font-size: 14px; font-weight: 500;
+  transition: background .12s, color .12s;
+}
+nav.primary a:hover { background: #2d2d2d; color: #fff; }
+nav.primary a.active { background: #b91c1c; color: #fff; }
+nav.primary a.active:hover { background: #991b1b; }
+.btn-refresh {
+  background: #b91c1c; color: #fff; text-decoration: none;
+  padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px;
+  border: none; cursor: pointer; transition: background .12s;
+}
+.btn-refresh:hover { background: #991b1b; }
+main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+section.page-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 12px;
+}
+section.page-header h2 { margin: 0; font-size: 22px; font-weight: 600; }
+section.page-header .subtitle { color: #6b7280; font-size: 13px; }
+table {
+  width: 100%; border-collapse: collapse; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06); border-radius: 8px; overflow: hidden;
+}
+th, td {
+  padding: 10px 12px; text-align: left; vertical-align: middle;
+  border-bottom: 1px solid #eef0f3;
+}
+th { background: #f3f4f6; font-size: 12px; font-weight: 600; color: #4b5563; text-transform: uppercase; letter-spacing: .04em; }
+tr:last-child td { border-bottom: 0; }
+tr:hover td { background: #fafbfc; }
+td.id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: #6b7280; }
+.muted { color: #9ca3af; }
+.kbd { font-family: ui-monospace, SFMono-Regular, monospace; background: #f3f4f6; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .03em;
+  background: #eef0f3; color: #4b5563;
+}
+.badge.ok { background: #d1fae5; color: #065f46; }
+.badge.off { background: #fee2e2; color: #991b1b; }
+.badge.domestic { background: #dbeafe; color: #1e40af; }
+.badge.import { background: #f3e8ff; color: #6b21a8; }
+.empty { padding: 60px 20px; text-align: center; color: #6b7280; }
+.note { padding: 14px 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; color: #78350f; font-size: 13px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.card .label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.card .value { font-size: 24px; font-weight: 700; color: #1a1a1a; }
+.card .value small { font-size: 13px; font-weight: 400; color: #6b7280; margin-left: 6px; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+dl.kv dt { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+dl.kv dd { margin: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; }
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.action { color: #b91c1c; font-weight: 500; }
+{% block styles %}{% endblock %}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>EncAr<small>parser CRM</small></h1>
+  <nav class="primary">
+    <a href="/" {% if request.url.path == "/" %}class="active"{% endif %}>Машины</a>
+    <a href="/categories" {% if request.url.path == "/categories" %}class="active"{% endif %}>Категории</a>
+    <a href="/parsing" {% if request.url.path == "/parsing" %}class="active"{% endif %}>Парсинг</a>
+    <a href="/history" {% if request.url.path == "/history" %}class="active"{% endif %}>История</a>
+    <a href="/settings" {% if request.url.path == "/settings" %}class="active"{% endif %}>Настройки</a>
+  </nav>
+  <form method="get" action="{{ request.url.path }}" style="margin:0;">
+    <button type="submit" class="btn-refresh" aria-label="Обновить страницу">🔄 Обновить</button>
+  </form>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

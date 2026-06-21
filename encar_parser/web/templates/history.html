@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}EncAr — история{% endblock %}
+{% block description %}Полный список прогонов парсера из таблицы runs (последние ~100).{% endblock %}
+
+{% block styles %}
+td.id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; color: #6b7280; }
+td.count { text-align: right; font-variant-numeric: tabular-nums; }
+td.errors { font-size: 12px; max-width: 420px; }
+td.errors .err { display: block; padding: 2px 0; color: #991b1b; }
+td.errors .err + .err { border-top: 1px dotted #fecaca; margin-top: 2px; padding-top: 4px; }
+.muted { color: #9ca3af; }
+{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <h2>История прогонов</h2>
+    <div class="subtitle">Из таблицы <code>runs</code>, новые сверху. Ошибки
+      обрезаны по <code>MAX_ERROR_LOG_ENTRIES=50</code>; в строке показан счётчик
+      сохранённых записей.</div>
+  </div>
+</section>
+
+{% if not runs %}
+  <div class="empty">Прогонов ещё не было.</div>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>id</th>
+      <th>started</th>
+      <th>finished</th>
+      <th>длительность</th>
+      <th>models</th>
+      <th>cars</th>
+      <th>failed</th>
+      <th>ошибки</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in runs %}
+    <tr>
+      <td class="id">{{ r.id }}</td>
+      <td>{{ r.started_at.strftime("%Y-%m-%d %H:%M:%S") if r.started_at else "—" }}</td>
+      <td>{{ r.finished_at.strftime("%Y-%m-%d %H:%M:%S") if r.finished_at else "—" }}</td>
+      <td>
+        {% if r.started_at and r.finished_at %}
+          {% set secs = (r.finished_at - r.started_at).total_seconds() %}
+          {% if secs < 60 %}{{ "%.0f"|format(secs) }}с
+          {% elif secs < 3600 %}{{ "%.1f"|format(secs/60) }}м
+          {% else %}{{ "%.1f"|format(secs/3600) }}ч{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td class="count">{{ r.models_done }} / {{ r.models_planned }}</td>
+      <td class="count">{{ r.cars_fetched }}</td>
+      <td class="count">{{ r.cars_failed }}</td>
+      <td class="errors">
+        {% if r.error_log %}
+          {% for e in r.error_log[:3] %}
+            <span class="err"><code>{{ e.slug or "?" }}</code>: {{ e.error }}</span>
+          {% endfor %}
+          {% if r.error_log|length > 3 %}
+            <span class="err muted">… и ещё {{ r.error_log|length - 3 }}</span>
+          {% endif %}
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}EncAr — настройки{% endblock %}
+{% block description %}Текущие значения из Settings (.env + defaults). Только просмотр.{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <h2>Настройки</h2>
+    <div class="subtitle">Read-only просмотр конфигурации. Источник — Settings из
+      <code>encar_parser.config</code> с загрузкой из <code>.env</code>.</div>
+  </div>
+</section>
+
+<div class="note" style="margin-bottom: 16px;">
+  Редактирование настроек — <strong>следующим шагом</strong>. Сейчас значения
+  меняются через переменные окружения (или <code>.env</code>) и требуют
+  перезапуска web/parser-контейнеров. UI-форма для записи появится отдельно.
+</div>
+
+<dl class="kv">
+  <dt>krw_to_rub_rate</dt>
+  <dd>{{ "%.6f"|format(settings.krw_to_rub_rate) }} <span class="muted">— курс ₩→₽ для витрины</span></dd>
+
+  <dt>web_port</dt>
+  <dd>{{ settings.web_port }} <span class="muted">— порт FastAPI внутри контейнера (снаружи проброшен на 127.0.0.1)</span></dd>
+
+  <dt>database_url</dt>
+  <dd><code>{{ settings.database_url }}</code></dd>
+
+  <dt>log_level</dt>
+  <dd><code>{{ settings.log_level }}</code></dd>
+
+  <dt>sentry_dsn</dt>
+  <dd>{% if settings.sentry_dsn %}<code>{{ settings.sentry_dsn }}</code>{% else %}<span class="muted">— не задан</span>{% endif %}</dd>
+
+  <dt>encar_referer</dt>
+  <dd><code>{{ settings.encar_referer }}</code></dd>
+
+  <dt>api_list_base</dt>
+  <dd><code>{{ settings.api_list_base }}</code></dd>
+
+  <dt>api_detail_template</dt>
+  <dd><code>{{ settings.api_detail_template }}</code></dd>
+
+  <dt>request_timeout_sec</dt>
+  <dd>{{ settings.request_timeout_sec }} <span class="muted">— таймаут httpx</span></dd>
+
+  <dt>retry_max_attempts</dt>
+  <dd>{{ settings.retry_max_attempts }}</dd>
+
+  <dt>rate_limit_per_hour</dt>
+  <dd>{{ settings.rate_limit_per_hour }}</dd>
+
+  <dt>min_delay_sec / max_delay_sec</dt>
+  <dd>{{ settings.min_delay_sec }} / {{ settings.max_delay_sec }} <span class="muted">— пауза между detail-запросами</span></dd>
+
+  <dt>min_model_delay_sec / max_model_delay_sec</dt>
+  <dd>{{ settings.min_model_delay_sec }} / {{ settings.max_model_delay_sec }} <span class="muted">— пауза между моделями</span></dd>
+
+  <dt>max_pages</dt>
+  <dd>{{ settings.max_pages }} <span class="muted">— backstop на один прогон модели</span></dd>
+
+  <dt>page_size</dt>
+  <dd>{{ settings.page_size }}</dd>
+
+  <dt>scheduler_bucket_count</dt>
+  <dd>{{ settings.scheduler_bucket_count }} <span class="muted">— N в (day_of_year − 1) % N; default 14</span></dd>
+
+  <dt>scheduler_cooldown_hours</dt>
+  <dd>{{ settings.scheduler_cooldown_hours }} <span class="muted">— не парсить модель чаще раза в N часов</span></dd>
+
+  <dt>backfill_state_path</dt>
+  <dd><code>{{ settings.backfill_state_path }}</code> <span class="muted">— на парсер-контейнере (volume encar_logs)</span></dd>
+
+  <dt>plan_counts_cache</dt>
+  <dd><code>{{ settings.plan_counts_cache }}</code> <span class="muted">— кэш dry-run планировщика</span></dd>
+
+  <dt>img_proxy_timeout_sec</dt>
+  <dd>{{ settings.img_proxy_timeout_sec }}</dd>
+
+  <dt>img_proxy_cache_max_entries</dt>
+  <dd>{{ settings.img_proxy_cache_max_entries }}</dd>
+
+  <dt>img_proxy_cache_ttl_sec</dt>
+  <dd>{{ settings.img_proxy_cache_ttl_sec }}</dd>
+
+  <dt>img_proxy_allowed_hosts</dt>
+  <dd><code>{{ settings.img_proxy_allowed_hosts|join(", ") }}</code></dd>
+</dl>
+
+<div class="note" style="margin-top: 16px;">
+  TODO (следующие шаги, в порядке приоритета):
+  <ul style="margin: 8px 0 0 16px; padding: 0;">
+    <li>UI-форма редактирования настроек с записью в <code>.env</code> (или в отдельный config-table)</li>
+    <li>Поле «окно новинок в днях» — для фильтра «какие машины считать свежими» на странице Машины</li>
+    <li>Управление scheduler'ом: ручной запуск backfill / run-incremental / plan из веба</li>
+  </ul>
+</div>
+{% endblock %}

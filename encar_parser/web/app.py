@@ -1,20 +1,27 @@
-"""FastAPI web viewer for the encar parser.
+"""FastAPI web viewer + CRM for the encar parser.
 
-Two endpoints:
+Five server-rendered pages (Jinja2 + a tiny bit of hand-written CSS,
+no external CDN):
 
-* ``GET /`` — renders an HTML table of cars currently in the DB.
-* ``GET /img?src=<urlencoded_url>`` — proxy that fetches an image from
-  the working encar photo CDN (``ci.encar.com``) and streams the bytes
-  back. See :mod:`encar_parser.web.img_proxy` for the security model.
+* ``GET /``            — Машины: vitrine of primary listings (cars).
+* ``GET /categories``  — Категории: every model in ``search_models``
+                         with car counts and a "open on Encar" link.
+* ``GET /parsing``     — Парсинг: dashboard (totals + last 10 runs +
+                         per-model last-run-at).
+* ``GET /history``     — История: full runs table, newest first,
+                         capped to ~100.
+* ``GET /settings``    — Настройки: read-only view of current
+                         ``Settings`` from .env / defaults.
 
-Deployment
-──────────
-Run via uvicorn from the project root::
+Plus the image proxy:
 
-    .venv/bin/python -m uvicorn encar_parser.web.app:app --host 0.0.0.0 --port 8090
+* ``GET /img?src=…``   — fetches photos from the Encar photo CDN
+                         (ci.encar.com) and streams the bytes back.
+                         See :mod:`encar_parser.web.img_proxy` for the
+                         security model.
 
-In docker-compose this happens in the ``web`` service (see
-``docker-compose.yml``).
+Bind is always 127.0.0.1 — the CRM is NOT exposed to the internet.
+SSH tunnel only. See PROJECT_REPORT.md §12 for the deploy recipe.
 """
 from __future__ import annotations
 
@@ -29,11 +36,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from encar_parser.config import get_settings
-from encar_parser.db.models import Car
+from encar_parser.db.models import Car, CarModelMatch, Run, SearchModel
 from encar_parser.db.session import get_sessionmaker as _prod_sessionmaker
 from encar_parser.photos import first_photo_proxy_src
 from encar_parser.translations import translate_color
 from encar_parser.web.img_proxy import ProxyError, fetch_image
+from encar_parser.web.links import encar_web_url, extract_car_type_from_action
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -56,9 +64,8 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
     instead of the production postgres one).
     """
     sm = sessionmaker or _prod_sessionmaker()
-    app = FastAPI(title="encar-parser web viewer", docs_url=None, redoc_url=None)
+    app = FastAPI(title="encar-parser CRM", docs_url=None, redoc_url=None)
     jinja = _build_jinja()
-    template = jinja.get_template("index.html")
     settings = get_settings()
 
     # ── helpers ─────────────────────────────────────────────────────────
@@ -75,14 +82,6 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
         same physical car are hidden from the vitrine. The counter
         (``len(rows)``) therefore reflects unique cars, not raw rows.
         See :mod:`encar_parser.dedup` for the grouping logic.
-
-        Note on colors: we re-translate from ``color_original`` at render time
-        rather than trusting the stored ``color_ru``. The DB column was
-        populated with whatever the parser's translation dict knew at the
-        time the row was inserted — so cars parsed before e.g. ``청색`` was
-        added carry the raw Korean string in ``color_ru``. Re-translating
-        here means the web view always reflects the *current* dict without
-        needing a data migration.
         """
         cars = (await s.scalars(
             select(Car)
@@ -90,9 +89,6 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
             .order_by(Car.last_seen_at.desc().nullslast(), Car.encar_id.desc())
             .limit(500)
         )).all()
-        # ``last_seen`` reflects the freshness of the DB itself (any new
-        # listing, primary or hidden duplicate) — it answers "when was the
-        # last run?", not "when was the latest visible row added?".
         last_seen = await s.scalar(select(func.max(Car.last_seen_at)))
         rows: list[dict[str, Any]] = []
         for c in cars:
@@ -114,20 +110,166 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
             })
         return rows, last_seen
 
+    async def _load_categories(s: AsyncSession) -> list[dict[str, Any]]:
+        """Every model in ``search_models`` with primary-car counts.
+
+        One round-trip with a LEFT JOIN through the car_model_matches
+        junction table. Avoids the N+1 of per-model count queries.
+        """
+        rows = await s.execute(
+            select(
+                SearchModel.id,
+                func.count(func.distinct(Car.encar_id)).label("n"),
+            )
+            .select_from(SearchModel)
+            .outerjoin(
+                CarModelMatch,
+                CarModelMatch.search_model_id == SearchModel.id,
+            )
+            .outerjoin(
+                Car,
+                (Car.encar_id == CarModelMatch.encar_id)
+                & (Car.is_primary.is_(True)),
+            )
+            .group_by(SearchModel.id)
+        )
+        car_counts: dict[int, int] = {sid: int(n) for sid, n in rows.all()}
+
+        models = (await s.scalars(
+            select(SearchModel).order_by(
+                SearchModel.enabled.desc().nullslast(),
+                SearchModel.priority, SearchModel.slug,
+            )
+        )).all()
+        out: list[dict[str, Any]] = []
+        for m in models:
+            action = (m.encar_action or {}).get("q", "")
+            out.append({
+                "id": m.id,
+                "slug": m.slug,
+                "name": m.name,
+                "manufacturer": (m.encar_action or {}).get("manufacturer"),
+                "car_type_code": extract_car_type_from_action(action),
+                "enabled": m.enabled,
+                "priority": m.priority,
+                "cars_count": car_counts.get(m.id, 0),
+                "last_run_at": m.last_run_at,
+                "web_url": encar_web_url(m),
+            })
+        return out
+
+    async def _load_parsing(s: AsyncSession) -> dict[str, Any]:
+        """Aggregated state for the parsing dashboard."""
+        per_model_rows = await s.execute(
+            select(
+                SearchModel.id,
+                SearchModel.slug,
+                SearchModel.priority,
+                SearchModel.enabled,
+                SearchModel.last_run_at,
+                func.count(func.distinct(Car.encar_id)).label("n"),
+            )
+            .select_from(SearchModel)
+            .outerjoin(
+                CarModelMatch,
+                CarModelMatch.search_model_id == SearchModel.id,
+            )
+            .outerjoin(
+                Car,
+                (Car.encar_id == CarModelMatch.encar_id)
+                & (Car.is_primary.is_(True)),
+            )
+            .where(SearchModel.enabled.is_(True))
+            .group_by(SearchModel.id)
+            .order_by(SearchModel.priority, SearchModel.slug)
+        )
+        per_model = [
+            {
+                "slug": r.slug,
+                "priority": r.priority,
+                "enabled": r.enabled,
+                "last_run_at": r.last_run_at,
+                "cars_count": int(r.n),
+            }
+            for r in per_model_rows.all()
+        ]
+
+        total_models = await s.scalar(select(func.count()).select_from(SearchModel))
+        enabled_models = await s.scalar(
+            select(func.count()).select_from(SearchModel).where(SearchModel.enabled.is_(True))
+        )
+        disabled_models = (total_models or 0) - (enabled_models or 0)
+        cars_total = await s.scalar(select(func.count()).select_from(Car))
+        cars_primary = await s.scalar(
+            select(func.count()).select_from(Car).where(Car.is_primary.is_(True))
+        )
+        runs_total = await s.scalar(select(func.count()).select_from(Run))
+        recent_runs = (await s.scalars(
+            select(Run).order_by(Run.started_at.desc().nullslast()).limit(10)
+        )).all()
+
+        return {
+            "total_models": total_models or 0,
+            "enabled_models": enabled_models or 0,
+            "disabled_models": disabled_models,
+            "cars_total": cars_total or 0,
+            "cars_primary": cars_primary or 0,
+            "runs_total": runs_total or 0,
+            "recent_runs": recent_runs,
+            "per_model": per_model,
+        }
+
+    async def _load_history(s: AsyncSession, limit: int = 100) -> list[Run]:
+        return list((await s.scalars(
+            select(Run).order_by(Run.started_at.desc().nullslast()).limit(limit)
+        )).all())
+
+    def _render(request: Request, template_name: str, **ctx: Any) -> HTMLResponse:
+        template = jinja.get_template(template_name)
+        return HTMLResponse(template.render(request=request, **ctx))
+
     # ── routes ──────────────────────────────────────────────────────────
 
     @app.get("/", response_class=HTMLResponse)
-    async def index() -> HTMLResponse:
+    async def cars(request: Request) -> HTMLResponse:
         async with sm() as s:
             rows, last_seen = await _load_cars(s)
-        html = template.render(
+        return _render(
+            request, "cars.html",
             cars=rows,
             car_count=len(rows),
             krw_to_rub_rate=settings.krw_to_rub_rate,
             last_seen=last_seen,
             now=datetime.now(UTC),
         )
-        return HTMLResponse(html)
+
+    @app.get("/categories", response_class=HTMLResponse)
+    async def categories(request: Request) -> HTMLResponse:
+        async with sm() as s:
+            models = await _load_categories(s)
+        return _render(
+            request, "categories.html",
+            models=models,
+            total_models=len(models),
+            enabled_models=sum(1 for m in models if m["enabled"]),
+            with_cars=sum(1 for m in models if m["cars_count"] > 0),
+        )
+
+    @app.get("/parsing", response_class=HTMLResponse)
+    async def parsing(request: Request) -> HTMLResponse:
+        async with sm() as s:
+            data = await _load_parsing(s)
+        return _render(request, "parsing.html", **data)
+
+    @app.get("/history", response_class=HTMLResponse)
+    async def history(request: Request) -> HTMLResponse:
+        async with sm() as s:
+            runs = await _load_history(s)
+        return _render(request, "history.html", runs=runs)
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request) -> HTMLResponse:
+        return _render(request, "settings.html", settings=settings)
 
     @app.get("/img")
     async def img(src: str = Query(...)) -> Response:
