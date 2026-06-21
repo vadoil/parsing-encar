@@ -141,3 +141,21 @@ class Run(Base):
     cars_fetched: Mapped[int] = mapped_column(Integer, default=0)
     cars_failed: Mapped[int] = mapped_column(Integer, default=0)
     error_log: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
+
+
+class ModelOverride(Base):
+    """Operator edits that survive ``sync`` (which only touches ``search_models``).
+
+    Currently used by the /categories page for a manual Encar search URL.
+    Slug is intentionally NOT a foreign key to ``search_models`` — the
+    override survives even if the underlying model is removed from
+    ``models.yaml`` (e.g. temporarily between sync runs).
+    """
+
+    __tablename__ = "model_overrides"
+
+    slug: Mapped[str] = mapped_column(Text, primary_key=True)
+    manual_encar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )

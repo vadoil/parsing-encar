@@ -132,3 +132,20 @@ def encar_web_url(sm: SearchModel) -> str:
         f"{_FRONTEND_BASE}?carType={_front_car_type_param(car_type_code)}"
         f"#!{hash_fragment}"
     )
+
+
+def effective_encar_url(
+    sm: SearchModel,
+    manual_override: str | None,
+) -> tuple[str, bool]:
+    """Pick the URL the /categories row should link out to.
+
+    Returns ``(url, is_manual)``. If the operator has saved a manual
+    URL via the form on /categories, ``is_manual`` is True and
+    ``url`` is exactly what they typed (no validation — we trust the
+    human). Otherwise the auto-generated :func:`encar_web_url` is used.
+    """
+    manual = (manual_override or "").strip()
+    if manual:
+        return manual, True
+    return encar_web_url(sm), False

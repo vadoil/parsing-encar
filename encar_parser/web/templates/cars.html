@@ -27,6 +27,7 @@ td.price-rub { color: #4b5563; white-space: nowrap; font-size: 13px; }
     <h2>Машины</h2>
     <div class="subtitle">
       Машин в БД (is_primary=true): <strong>{{ car_count }}</strong>
+      {% if brand %}· фильтр по бренду: <strong>{{ brand }}</strong>{% endif %}
       {% if last_seen %}· обновлено: {{ last_seen.strftime("%Y-%m-%d %H:%M:%S UTC") }}{% else %}· нет данных{% endif %}
     </div>
     <div class="rate-note">
@@ -36,10 +37,28 @@ td.price-rub { color: #4b5563; white-space: nowrap; font-size: 13px; }
   </div>
 </section>
 
+{# Brand filter — GET form so the URL stays bookmarkable. #}
+<form method="get" action="/" style="margin: 0 0 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+  <label for="brand-select" style="font-size: 13px; color: #4b5563;">Бренд:</label>
+  <select id="brand-select" name="brand" onchange="this.form.submit()"
+          style="padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: #fff;">
+    {% for opt in brand_options %}
+      <option value="{{ opt.value }}" {% if opt.selected %}selected{% endif %}>{{ opt.label }}</option>
+    {% endfor %}
+  </select>
+  {% if brand %}
+    <a href="/" style="font-size: 13px;">сбросить</a>
+  {% endif %}
+</form>
+
 {% if not cars %}
   <div class="empty">
-    В БД пока нет машин с is_primary=true. Дождитесь первого прогона парсера
-    или запустите его вручную: <code>python -m encar_parser run-incremental</code>.
+    {% if brand %}
+      Нет машин с брендом «{{ brand }}». <a href="/">Сбросить фильтр</a>.
+    {% else %}
+      В БД пока нет машин с is_primary=true. Дождитесь первого прогона парсера
+      или запустите его вручную: <code>python -m encar_parser run-incremental</code>.
+    {% endif %}
   </div>
 {% else %}
 <table>
@@ -72,7 +91,7 @@ td.price-rub { color: #4b5563; white-space: nowrap; font-size: 13px; }
         {% endif %}
       </td>
       <td class="id">{{ c.encar_id }}</td>
-      <td class="brand">{{ c.brand }}</td>
+      <td class="brand">{{ c.brand_display }}</td>
       <td>{{ c.model }}</td>
       <td>{{ c.year_month.isoformat() if c.year_month else "—" }}</td>
       <td>{% if c.mileage_km is not none %}{{ "{:,}".format(c.mileage_km).replace(",", " ") }}{% else %}—{% endif %}</td>

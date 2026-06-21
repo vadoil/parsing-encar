@@ -9,6 +9,18 @@ td.count { text-align: right; font-variant-numeric: tabular-nums; font-weight: 6
 td.count.zero { color: #9ca3af; font-weight: 400; }
 td.actions { white-space: nowrap; }
 td.actions a { font-size: 12px; }
+td.url-cell { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; max-width: 360px; overflow-wrap: anywhere; color: #4b5563; }
+td.url-cell.manual { color: #b91c1c; font-weight: 600; }
+td.url-form input[type="text"] {
+  width: 320px; max-width: 100%;
+  padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px;
+}
+td.url-form button {
+  padding: 4px 10px; border: none; border-radius: 4px;
+  background: #1a1a1a; color: #fff; font-size: 11px; cursor: pointer;
+}
+td.url-form button:hover { background: #2d2d2d; }
 td.muted { color: #9ca3af; font-size: 12px; }
 .last-run { font-size: 12px; color: #4b5563; white-space: nowrap; }
 .last-run.never { color: #9ca3af; font-style: italic; }
@@ -42,6 +54,7 @@ td.muted { color: #9ca3af; font-size: 12px; }
       <th>последний прогон</th>
       <th>эталон</th>
       <th>открыть</th>
+      <th>своя ссылка на Encar</th>
     </tr>
   </thead>
   <tbody>
@@ -49,7 +62,7 @@ td.muted { color: #9ca3af; font-size: 12px; }
     <tr>
       <td class="id">{{ m.id }}</td>
       <td><code>{{ m.slug }}</code></td>
-      <td>{{ m.manufacturer or "—" }}</td>
+      <td>{{ m.manufacturer_display or "—" }}</td>
       <td>{{ m.name }}</td>
       <td>
         {% if m.car_type_code == "Y" %}<span class="badge domestic" title="국산 — domestic">Y</span>
@@ -70,14 +83,30 @@ td.muted { color: #9ca3af; font-size: 12px; }
       <td class="actions">
         <a href="{{ m.web_url }}" target="_blank" rel="noopener" title="Открыть поиск по этой модели на Encar">на сайте ↗</a>
       </td>
+      <td class="url-form">
+        <form method="post" action="/categories/{{ m.slug }}/url" style="margin:0; display: flex; gap: 4px; align-items: center;">
+          <input type="text" name="manual_encar_url"
+                 placeholder="оставьте пустым для авто-ссылки"
+                 value="{{ m.manual_url }}"
+                 title="{% if m.is_manual_url %}Ручная ссылка — нажмите Сохранить с пустым полем чтобы сбросить{% else %}Подставьте полный URL на www.encar.com{% endif %}">
+          <button type="submit">Сохранить</button>
+        </form>
+        <div class="muted" style="font-size: 10px; margin-top: 2px;">
+          {% if m.is_manual_url %}
+            ручная{% if m.updated_at %} (обновлено {{ m.updated_at.strftime("%Y-%m-%d %H:%M") }} UTC){% endif %}
+          {% else %}авто из <code>encar_action["q"]</code>{% endif %}
+        </div>
+      </td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 <p class="muted" style="margin-top: 12px; font-size: 12px;">
-  CarType берётся из <code>sm.car_type_code</code>; если None — отображается как «?».
-  Ссылка «на сайте» строится из <code>sm.encar_action["q"]</code> + JSON-hash (см.
-  <code>encar_parser/web/links.py</code>).
+  Бренд показывается по-английски через
+  <code>encar_parser.brand_display.brand_display</code>. CarType берётся из
+  <code>sm.encar_action["q"]</code>. Своя ссылка хранится в
+  <code>model_overrides</code> и переживает <code>sync</code> (sync не трогает
+  эту таблицу).
 </p>
 {% endif %}
 {% endblock %}

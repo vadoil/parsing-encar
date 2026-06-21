@@ -29,19 +29,30 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from encar_parser.brand_display import brand_display
 from encar_parser.config import get_settings
-from encar_parser.db.models import Car, CarModelMatch, Run, SearchModel
+from encar_parser.db.models import (
+    Car,
+    CarModelMatch,
+    ModelOverride,
+    Run,
+    SearchModel,
+)
 from encar_parser.db.session import get_sessionmaker as _prod_sessionmaker
 from encar_parser.photos import first_photo_proxy_src
 from encar_parser.translations import translate_color
 from encar_parser.web.img_proxy import ProxyError, fetch_image
-from encar_parser.web.links import encar_web_url, extract_car_type_from_action
+from encar_parser.web.links import (
+    encar_web_url,
+    effective_encar_url,
+    extract_car_type_from_action,
+)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -75,19 +86,41 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
             return None
         return int(round(krw * settings.krw_to_rub_rate))
 
-    async def _load_cars(s: AsyncSession) -> tuple[list[dict[str, Any]], datetime | None]:
-        """Pull the most-recent cars and the latest ``last_seen_at``.
+    async def _load_cars(
+        s: AsyncSession, *, brand: str | None = None,
+    ) -> tuple[list[dict[str, Any]], datetime | None, list[str]]:
+        """Pull the most-recent cars, the latest ``last_seen_at``,
+        and the list of distinct brands currently visible.
 
         Filters to ``is_primary = True`` only — duplicate listings of the
         same physical car are hidden from the vitrine. The counter
         (``len(rows)``) therefore reflects unique cars, not raw rows.
         See :mod:`encar_parser.dedup` for the grouping logic.
+
+        ``brand`` is an optional exact-match filter on
+        ``Car.brand`` — wired to the ``?brand=`` query param on ``GET /``.
+        The distinct brands list is computed BEFORE the brand filter
+        is applied so the dropdown always shows every brand a user
+        could pick from.
         """
+        # Distinct brands — across the full is_primary set, not the
+        # currently-filtered subset, so the dropdown doesn't shrink
+        # to a single option once a brand is picked.
+        all_brands_rows = await s.execute(
+            select(Car.brand)
+            .where(Car.is_primary.is_(True), Car.brand.is_not(None))
+            .distinct()
+            .order_by(Car.brand)
+        )
+        all_brands = [b for b in all_brands_rows.scalars().all() if b]
+
+        # Cars for the table — optionally filtered by brand.
+        stmt = select(Car).where(Car.is_primary.is_(True))
+        if brand:
+            stmt = stmt.where(Car.brand == brand)
         cars = (await s.scalars(
-            select(Car)
-            .where(Car.is_primary.is_(True))
-            .order_by(Car.last_seen_at.desc().nullslast(), Car.encar_id.desc())
-            .limit(500)
+            stmt.order_by(Car.last_seen_at.desc().nullslast(), Car.encar_id.desc())
+                .limit(500)
         )).all()
         last_seen = await s.scalar(select(func.max(Car.last_seen_at)))
         rows: list[dict[str, Any]] = []
@@ -95,6 +128,7 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
             rows.append({
                 "encar_id": c.encar_id,
                 "brand": c.brand,
+                "brand_display": brand_display(c.brand),
                 "model": c.model,
                 "year_month": c.year_month,
                 "mileage_km": c.mileage_km,
@@ -108,7 +142,7 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
                 "encar_detail_url": c.encar_detail_url,
                 "thumb_src": first_photo_proxy_src(c.photo_urls),
             })
-        return rows, last_seen
+        return rows, last_seen, all_brands
 
     async def _load_categories(s: AsyncSession) -> list[dict[str, Any]]:
         """Every model in ``search_models`` with primary-car counts.
@@ -141,20 +175,34 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
                 SearchModel.priority, SearchModel.slug,
             )
         )).all()
+
+        # Manual overrides — keyed by slug, slug-only (the override
+        # table has no FK to search_models by design).
+        override_rows = await s.execute(select(ModelOverride))
+        overrides: dict[str, ModelOverride] = {o.slug: o for o in override_rows.scalars().all()}
+
         out: list[dict[str, Any]] = []
         for m in models:
             action = (m.encar_action or {}).get("q", "")
+            manufacturer = (m.encar_action or {}).get("manufacturer")
+            override = overrides.get(m.slug)
+            manual = override.manual_encar_url if override else None
+            url, is_manual = effective_encar_url(m, manual)
             out.append({
                 "id": m.id,
                 "slug": m.slug,
                 "name": m.name,
-                "manufacturer": (m.encar_action or {}).get("manufacturer"),
+                "manufacturer": manufacturer,
+                "manufacturer_display": brand_display(manufacturer),
                 "car_type_code": extract_car_type_from_action(action),
                 "enabled": m.enabled,
                 "priority": m.priority,
                 "cars_count": car_counts.get(m.id, 0),
                 "last_run_at": m.last_run_at,
-                "web_url": encar_web_url(m),
+                "web_url": url,
+                "is_manual_url": is_manual,
+                "manual_url": manual or "",
+                "updated_at": (override.updated_at if override else None),
             })
         return out
 
@@ -231,9 +279,22 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
     # ── routes ──────────────────────────────────────────────────────────
 
     @app.get("/", response_class=HTMLResponse)
-    async def cars(request: Request) -> HTMLResponse:
+    async def cars(
+        request: Request,
+        brand: str | None = Query(None, description="Filter by exact brand name"),
+    ) -> HTMLResponse:
         async with sm() as s:
-            rows, last_seen = await _load_cars(s)
+            rows, last_seen, brands = await _load_cars(s, brand=brand or None)
+        # Build the dropdown options: an "All" pseudo-option + one per
+        # distinct brand with its display label (Korean → English via
+        # brand_display). The "All" option is selected when no filter
+        # is active.
+        brand_options = [
+            {"value": "", "label": "Все", "selected": not brand},
+        ] + [
+            {"value": b, "label": brand_display(b), "selected": b == brand}
+            for b in brands
+        ]
         return _render(
             request, "cars.html",
             cars=rows,
@@ -241,6 +302,8 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
             krw_to_rub_rate=settings.krw_to_rub_rate,
             last_seen=last_seen,
             now=datetime.now(UTC),
+            brand=brand,
+            brand_options=brand_options,
         )
 
     @app.get("/categories", response_class=HTMLResponse)
@@ -270,6 +333,39 @@ def create_app(sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> 
     @app.get("/settings", response_class=HTMLResponse)
     async def settings_page(request: Request) -> HTMLResponse:
         return _render(request, "settings.html", settings=settings)
+
+    @app.post("/categories/{slug}/url")
+    async def save_model_url(
+        slug: str,
+        manual_encar_url: str = Form(""),
+    ) -> RedirectResponse:
+        """Save (or clear) a manual Encar URL override for one model.
+
+        Empty string → delete the override (falls back to auto).
+        Any other string → upsert with the verbatim URL (no validation;
+        we trust the operator).
+
+        Always 303-redirect back to /categories so the browser refresh
+        shows the new effective URL on the row.
+        """
+        from datetime import UTC, datetime
+        from fastapi.responses import RedirectResponse
+        manual = (manual_encar_url or "").strip()
+        async with sm() as s:
+            existing = await s.scalar(
+                select(ModelOverride).where(ModelOverride.slug == slug)
+            )
+            if manual:
+                if existing:
+                    existing.manual_encar_url = manual
+                    existing.updated_at = datetime.now(UTC)
+                else:
+                    s.add(ModelOverride(slug=slug, manual_encar_url=manual))
+            else:
+                if existing:
+                    await s.delete(existing)
+            await s.commit()
+        return RedirectResponse(url="/categories", status_code=303)
 
     @app.get("/img")
     async def img(src: str = Query(...)) -> Response:
