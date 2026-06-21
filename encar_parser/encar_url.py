@@ -13,6 +13,12 @@ Encar exposes an internal JSON API that its own front-end calls:
 This module builds that API URL. It also keeps a human-readable front-end URL
 (www.encar.com/...#!...) purely for reference / Referer headers.
 
+CarType classification (Y/N) lives in :mod:`encar_parser.car_type`. Every
+model in ``models.yaml`` carries its own ``car_type_code``; this module
+falls back to ``"N"`` (import) when the field is missing — which is the
+safer default since most unknown brands are imports, and asking Encar
+for an import brand with CarType=Y silently returns 0 cars.
+
 NOTE: encar can change CarType codes and field names. If a query returns 0
 results, capture the real `q` from your browser devtools (Network tab) and paste
 it into models.yaml as `raw_q:` — it overrides the generated filter.
@@ -24,6 +30,11 @@ import urllib.parse
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from encar_parser.car_type import CAR_TYPE_DOMESTIC, CAR_TYPE_IMPORT, classify_brand
+from encar_parser.utils.log import get_logger
+
+log = get_logger(__name__)
 
 EncCarType = Literal["for", "kor"]  # for = imported, kor = domestic (front-end carType)
 SortOrder = Literal["ModifiedDate", "PriceAsc", "PriceDesc", "MileageAsc", "Year"]
@@ -71,9 +82,12 @@ class ModelConfig(BaseModel):
     # Escape hatch: a raw `q` filter copied verbatim from devtools. When set,
     # it is used as-is and the generated filter is ignored.
     raw_q: str | None = None
-    # Encar CarType cell code used inside `q` (Y/N/etc). Defaults are a best
-    # guess; override here if results look wrong.
-    car_type_code: str = "Y"
+    # Encar CarType cell code used inside `q`. Default is ``"N"`` (import) —
+    # the safer fallback for unknown brands, since most manufacturers in
+    # the global market are imports. Set this explicitly in ``models.yaml``
+    # (see :mod:`encar_parser.car_type` for the domestic/import split) so
+    # the YAML is the source of truth, not this default.
+    car_type_code: str = CAR_TYPE_IMPORT
 
 
 def _cell(field: str, value: str) -> str:
@@ -100,6 +114,24 @@ def build_q(cfg: ModelConfig) -> str:
     """
     if cfg.raw_q:
         return cfg.raw_q
+
+    # Sanity-check: if we know the brand, does the explicit car_type_code
+    # match what we'd derive? Mismatch is almost always a typo in models.yaml
+    # — Encar will silently return 0 cars if we ask for BMW with CarType.Y.
+    if cfg.manufacturer:
+        derived_code, recognised = classify_brand(cfg.manufacturer)
+        if recognised and derived_code != cfg.car_type_code:
+            log.warning(
+                "cartype_mismatch_with_brand",
+                slug=cfg.slug,
+                manufacturer=cfg.manufacturer,
+                configured=cfg.car_type_code,
+                derived_from_brand=derived_code,
+                hint="CarType in models.yaml disagrees with the brand's "
+                     "known classification in encar_parser.car_type. "
+                     "Update models.yaml or add the brand to "
+                     "DOMESTIC_BRANDS_EN_TO_KR.",
+            )
 
     # Cells from shallowest to deepest. The deepest becomes the body (bare, no
     # C. prefix); everything above is a wrapper (with C. prefix).

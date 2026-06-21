@@ -32,6 +32,12 @@ DOMESTIC_BRAND_KR = {
     "Genesis": "제네시스",
     "Ssangyong": "쌍용",
 }
+# Kept for backward compatibility with imports like
+# `from encar_parser.build_pool import DOMESTIC_BRANDS`. New code should
+# import from :mod:`encar_parser.car_type` instead — that's the single
+# source of truth. The English-name set above is a strict subset of
+# ``car_type.DOMESTIC_BRANDS_EN_TO_KR`` (which also covers KG Mobility,
+# Renault Korea, GM Korea, etc.).
 # For imports, Encar sometimes uses the Korean transliteration of the brand
 # as the Manufacturer cell. Verified against the live API in 2026-06-18
 # session. Brands not in this map (e.g. 'BMW', 'Land Rover') fall back to

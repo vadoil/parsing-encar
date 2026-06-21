@@ -13,6 +13,15 @@ import typer
 import yaml
 from sqlalchemy import select
 
+from encar_parser.backfill import walk_backfill
+from encar_parser.car_type import (
+    CAR_TYPE_DOMESTIC,
+    CAR_TYPE_IMPORT,
+    DOMESTIC_BRANDS_EN_TO_KR,
+    KNOWN_IMPORT_BRANDS,
+    classify_brand,
+    is_known_brand,
+)
 from encar_parser.config import get_settings
 from encar_parser.db.models import Run, SearchModel
 from encar_parser.db.repository import (
@@ -25,8 +34,13 @@ from encar_parser.fetchers.api import ApiFetcher
 from encar_parser.fetchers.browser import BrowserFetcher
 from encar_parser.fetchers.factory import FallbackFetcher
 from encar_parser.memlog import MemSampler
-from encar_parser.pipeline import make_list_url_for_page, run_model
-from encar_parser.scheduler import models_for_today
+from encar_parser.pipeline import (
+    make_list_url_for_page,
+    run_model,
+    run_model_incremental,
+)
+from encar_parser.plan import run_plan_cli, render_plan_text, render_rotation_text
+from encar_parser.scheduler import plan_today
 from encar_parser.utils.log import get_logger, setup_logging
 from encar_parser.utils.rate_limit import RandomDelay
 from encar_parser.validate_pool import run_validate_pool
@@ -315,6 +329,383 @@ async def _dedup_async(*, json_output: bool) -> None:
         )
 
 
+# ── Phase 4: scheduler (incremental / backfill / plan) ──────────────────
+
+
+@app.command("run-incremental")
+def run_incremental(
+    cooldown_hours: int = typer.Option(
+        0, "--cooldown-hours",
+        help="Skip models whose last_run_at is within this window. "
+             "0 = use settings.scheduler_cooldown_hours.",
+    ),
+    bucket_count: int = typer.Option(
+        0, "--bucket-count",
+        help="Override settings.scheduler_bucket_count (default 14).",
+    ),
+    max_models: int = typer.Option(
+        0, "--max-models",
+        help="Cap today's slice to this many models (0 = all).",
+    ),
+    max_pages: int = typer.Option(
+        0, "--max-pages",
+        help="Override settings.max_pages for this run.",
+    ),
+) -> None:
+    """Run TODAY's slice incrementally — stop as soon as we hit known-recent cars.
+
+    The EncAr list API returns cars in ModifiedDate order (newest first).
+    The incremental walker fetches one page at a time and stops when the
+    newest item on the page was already seen within ``--cooldown-hours``
+    (default 12h). Most daily runs process 0-200 cars per model and
+    finish in well under an hour.
+
+    Respects per-model cooldown: a model that ran recently is skipped
+    even if it is today's bucket. After processing, dedup runs at the
+    end so freshly-added listings collapse into the existing groups.
+    """
+    setup_logging()
+    asyncio.run(_run_incremental_async(
+        cooldown_hours=cooldown_hours,
+        bucket_count=bucket_count,
+        max_models=max_models,
+        max_pages=max_pages,
+    ))
+
+
+async def _run_incremental_async(
+    *,
+    cooldown_hours: int,
+    bucket_count: int,
+    max_models: int,
+    max_pages: int,
+) -> None:
+    settings = get_settings()
+    Session = get_sessionmaker()
+    cooldown = cooldown_hours or settings.scheduler_cooldown_hours
+    buckets = bucket_count or settings.scheduler_bucket_count
+    pages = max_pages or settings.max_pages
+    today = datetime.now(UTC).date()
+
+    mem = MemSampler(interval_sec=60.0, label="incremental")
+    mem.start()
+    try:
+        async with Session() as session:
+            enabled = await get_enabled_models(session)
+            plan = plan_today(enabled, today, bucket_count=buckets, cooldown_hours=cooldown)
+            log.info(
+                "incremental_plan",
+                **plan.as_dict(),
+            )
+            today_models = plan.today_models
+            if max_models and len(today_models) > max_models:
+                log.info(
+                    "max_models_cap",
+                    before=len(today_models),
+                    after=max_models,
+                )
+                today_models = today_models[:max_models]
+            if not today_models:
+                typer.echo("No models scheduled for today (all deferred or empty bucket).")
+                return
+
+            total_cars = 0
+            suppressed_errors = 0
+
+            async with ApiFetcher() as api:
+                browser: BrowserFetcher | None = None
+                try:
+                    browser = BrowserFetcher()
+                    await browser.__aenter__()
+                except Exception as e:
+                    log.warning(
+                        "browser_fetcher_unavailable",
+                        error=str(e),
+                        hint="run `playwright install chromium --with-deps` to enable fallback",
+                    )
+                    browser = None
+
+                if browser is not None:
+                    fetcher: Fetcher = FallbackFetcher(primary=api, secondary=browser)
+                else:
+                    fetcher = api  # type: ignore[assignment]
+                request_delay = RandomDelay(settings.min_delay_sec, settings.max_delay_sec)
+
+                try:
+                    for sm in today_models:
+                        try:
+                            n = await run_model_incremental(
+                                sm,
+                                fetcher=fetcher,
+                                session=session,
+                                list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),
+                                detail_url_template=settings.api_detail_template,
+                                request_delay=request_delay,
+                                max_pages=pages,
+                                cooldown_hours=cooldown,
+                            )
+                            total_cars += n
+                        except Exception as e:
+                            suppressed_errors += 1
+                            log.error("model_failed", slug=sm.slug, error=str(e))
+                        session.expunge_all()
+                        await asyncio.sleep(random.uniform(
+                            settings.min_model_delay_sec,
+                            settings.max_model_delay_sec,
+                        ))
+                finally:
+                    if browser is not None:
+                        await browser.__aexit__(None, None, None)
+
+            # Phase 2: dedup at the end so newcomers fold into existing groups.
+            dedup_report = await run_dedup(session)
+            await session.commit()
+            log.info(
+                "dedup_done",
+                duplicate_groups=dedup_report.duplicate_groups,
+                rows_hidden=dedup_report.rows_hidden,
+                rows_primary=dedup_report.rows_primary,
+            )
+
+            summary = mem.stop()
+            typer.echo(json.dumps({
+                "mode": "incremental",
+                "today": today.isoformat(),
+                "bucket": f"{plan.bucket_index}/{plan.bucket_count}",
+                "models_run": len(today_models),
+                "models_deferred_cooldown": plan.skipped_due_to_cooldown,
+                "cars_fetched": total_cars,
+                "suppressed_errors": suppressed_errors,
+                "dedup": dedup_report.as_dict(),
+                "memory": summary.as_dict(),
+            }, ensure_ascii=False, indent=2))
+    finally:
+        if mem._thread is not None and mem._thread.is_alive():
+            mem.stop()
+
+
+@app.command()
+def backfill(
+    resume: bool = typer.Option(True, "--resume/--no-resume",
+        help="Resume from the saved state file (default: resume)."),
+    reset: bool = typer.Option(False, "--reset",
+        help="Delete the state file and start fresh. Destructive!"),
+    chunk_size: int = typer.Option(0, "--chunk-size",
+        help="Models per resume unit (informational; 0 = unset)."),
+    max_pages: int = typer.Option(0, "--max-pages",
+        help="Override settings.max_pages for this run."),
+    max_models: int = typer.Option(0, "--max-models",
+        help="Cap the run to this many models (0 = all)."),
+    yes: bool = typer.Option(False, "--yes", "-y",
+        help="Skip the 'are you sure' confirmation."),
+) -> None:
+    """Walk EVERY enabled model once. Resumable: a crash mid-run picks up
+    at the last completed slug on the next invocation.
+
+    The state file (``/var/log/backfill_state.json``) is written after
+    every model. Delete it (``--reset``) only if you want to start
+    from zero.
+
+    NOT scheduled by cron — backfill is a manual operation. Run it
+    once after deploy to populate the catalog, then rely on
+    ``run-incremental`` for daily refresh.
+    """
+    setup_logging()
+    if reset and not yes:
+        typer.confirm(
+            "This will DELETE /var/log/backfill_state.json and restart the backfill. Continue?",
+            abort=True,
+        )
+    asyncio.run(_backfill_async(
+        resume=resume, reset=reset, chunk_size=chunk_size,
+        max_pages=max_pages, max_models=max_models,
+    ))
+
+
+async def _backfill_async(
+    *, resume: bool, reset: bool, chunk_size: int,
+    max_pages: int, max_models: int,
+) -> None:
+    settings = get_settings()
+    state_path = Path(settings.backfill_state_path)
+    if reset:
+        from encar_parser.backfill import reset_state
+        reset_state(state_path)
+        log.info("backfill_state_reset", path=str(state_path))
+
+    Session = get_sessionmaker()
+    mem = MemSampler(interval_sec=60.0, label="backfill")
+    mem.start()
+    pages = max_pages or settings.max_pages
+
+    try:
+        async with Session() as session:
+            enabled = await get_enabled_models(session)
+
+            # Track which slugs are completed across runs by reading from
+            # the state file (the CLI side filters via filter_remaining).
+            from encar_parser.backfill import filter_remaining, load_state
+            state = load_state(state_path) if resume else None
+            remaining = filter_remaining(enabled, state)
+            if max_models and len(remaining) > max_models:
+                log.info("max_models_cap", before=len(remaining), after=max_models)
+                remaining = remaining[:max_models]
+
+            async with ApiFetcher() as api:
+                browser: BrowserFetcher | None = None
+                try:
+                    browser = BrowserFetcher()
+                    await browser.__aenter__()
+                except Exception as e:
+                    log.warning("browser_fetcher_unavailable", error=str(e))
+                    browser = None
+
+                if browser is not None:
+                    fetcher: Fetcher = FallbackFetcher(primary=api, secondary=browser)
+                else:
+                    fetcher = api  # type: ignore[assignment]
+                request_delay = RandomDelay(settings.min_delay_sec, settings.max_delay_sec)
+
+                def on_state_change(s):
+                    log.info(
+                        "backfill_progress",
+                        completed=len(s.completed_slugs),
+                        current=s.current_slug,
+                        total=s.models_total,
+                    )
+
+                async def run_one(sm):
+                    return await run_model(
+                        sm,
+                        fetcher=fetcher,
+                        session=session,
+                        list_url_for_page=lambda page, action=sm.encar_action: make_list_url_for_page(action, page),
+                        detail_url_template=settings.api_detail_template,
+                        request_delay=request_delay,
+                        max_pages=pages,
+                    )
+
+                try:
+                    summary = await walk_backfill(
+                        remaining,
+                        state_path,
+                        run_one=run_one,
+                        chunk_size=chunk_size,
+                        on_state_change=on_state_change,
+                    )
+                finally:
+                    if browser is not None:
+                        await browser.__aexit__(None, None, None)
+
+            # Dedup at the very end so the freshly-backfilled catalog
+            # collapses into one row per physical car.
+            dedup_report = await run_dedup(session)
+            await session.commit()
+            log.info(
+                "dedup_done",
+                duplicate_groups=dedup_report.duplicate_groups,
+                rows_hidden=dedup_report.rows_hidden,
+                rows_primary=dedup_report.rows_primary,
+            )
+
+            sample = mem.stop()
+            typer.echo(json.dumps({
+                "mode": "backfill",
+                **summary,
+                "dedup": dedup_report.as_dict(),
+                "memory": sample.as_dict(),
+            }, ensure_ascii=False, indent=2))
+    finally:
+        if mem._thread is not None and mem._thread.is_alive():
+            mem.stop()
+
+
+@app.command()
+def plan(
+    day: str = typer.Option(
+        "", "--day",
+        help="ISO date to plan (e.g. 2026-06-21). Empty = today.",
+    ),
+    days: int = typer.Option(
+        1, "--days", "-n",
+        help="Plan N consecutive days (default 1 = today only).",
+    ),
+    bucket_count: int = typer.Option(
+        0, "--bucket-count",
+        help="Override settings.scheduler_bucket_count.",
+    ),
+    cooldown_hours: int = typer.Option(
+        0, "--cooldown-hours",
+        help="Override settings.scheduler_cooldown_hours.",
+    ),
+    per_car_sec: float = typer.Option(
+        0.0, "--per-car-sec",
+        help="Per-car fetch time estimate in seconds. 0 = use default (4.0).",
+    ),
+    probe: bool = typer.Option(
+        False, "--probe",
+        help="Hit the live EncAr API for fresh per-model counts (slow).",
+    ),
+    cache_path: str = typer.Option(
+        "", "--cache",
+        help="Override settings.plan_counts_cache.",
+    ),
+    json_output: bool = typer.Option(False, "--json",
+        help="Emit JSON instead of human text."),
+) -> None:
+    """Dry-run: show what would be parsed, with time estimates. No network
+    unless ``--probe`` is passed.
+
+    By default the planner uses cached per-model Counts from
+    ``/var/log/encar_counts.json``. Write that cache once with
+    ``plan --probe``, then every subsequent dry-run is instant.
+
+    Examples
+    --------
+
+        python -m encar_parser plan                    # today, human-readable
+        python -m encar_parser plan --days 14          # full 14-day rotation
+        python -m encar_parser plan --json             # machine-readable
+        python -m encar_parser plan --probe            # refresh counts cache
+        python -m encar_parser plan --day 2026-06-21   # specific date
+    """
+    setup_logging()
+    asyncio.run(_plan_async(
+        day=day or None, days=days, bucket_count=bucket_count,
+        cooldown_hours=cooldown_hours, per_car_sec=per_car_sec,
+        probe=probe, cache_path=cache_path or None,
+        json_output=json_output,
+    ))
+
+
+async def _plan_async(
+    *, day: str | None, days: int, bucket_count: int, cooldown_hours: int,
+    per_car_sec: float, probe: bool, cache_path: str | None, json_output: bool,
+) -> None:
+    settings = get_settings()
+    from datetime import date as _date
+    target_day = _date.fromisoformat(day) if day else None
+    cache = Path(cache_path or settings.plan_counts_cache)
+    Session = get_sessionmaker()
+    async with Session() as session:
+        enabled = await get_enabled_models(session)
+    rotation = await run_plan_cli(
+        enabled_models=enabled,
+        day=target_day,
+        days=days,
+        bucket_count=bucket_count or settings.scheduler_bucket_count,
+        cooldown_hours=cooldown_hours or settings.scheduler_cooldown_hours,
+        per_car_sec=per_car_sec or 4.0,
+        avg_count=469,
+        counts_cache=cache,
+        probe=probe,
+    )
+    if json_output:
+        typer.echo(json.dumps(rotation.as_dict(), ensure_ascii=False, indent=2))
+    else:
+        typer.echo(render_rotation_text(rotation))
+
+
 @app.command()
 def probe(
     slug: str = typer.Argument(..., help="slug from models.yaml to test"),
@@ -370,3 +761,111 @@ async def _probe_async(slug: str, config_path: Path, detail_id: int) -> None:
             typer.echo(f"\nDETAIL URL:\n{durl}")
             dresp = await api.get(durl, referer=settings.encar_referer)
             typer.echo(dresp.text()[:1500])
+
+
+# ── Phase 5: brand → CarType audit ────────────────────────────────────────
+
+
+@app.command("classify-brands")
+def classify_brands(
+    config_path: Path = typer.Option(Path("models.yaml"), "--config", "-c"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of human text."),
+) -> None:
+    """Audit every brand in models.yaml against the CarType classification.
+
+    Reads each model's manufacturer, looks it up in the domestic/import
+    maps in :mod:`encar_parser.car_type`, and reports the result. Use this
+    to spot:
+
+    * brands that defaulted to "N" because the classifier didn't know
+      them — add to DOMESTIC_BRANDS_EN_TO_KR or KNOWN_IMPORT_BRANDS
+    * model-level ``car_type_code:`` values that disagree with the
+      classifier's view (a likely typo in models.yaml)
+    * brands that no longer exist in the catalog (no entries at all)
+
+    Run this after every change to models.yaml or to the classification
+    maps in encar_parser/car_type.py.
+    """
+    setup_logging()
+    if not config_path.exists():
+        typer.echo(f"models file not found: {config_path}", err=True)
+        raise typer.Exit(1)
+    items = yaml.safe_load(config_path.read_text(encoding="utf-8")).get("models", [])
+
+    rows: list[dict[str, Any]] = []
+    for item in items:
+        mfr = item.get("manufacturer")
+        explicit = item.get("car_type_code")
+        derived, was_domestic = classify_brand(mfr)
+        rows.append({
+            "slug": item.get("slug"),
+            "manufacturer": mfr,
+            "car_type_code_yaml": explicit,
+            "car_type_code_derived": derived,
+            "was_domestic": was_domestic,
+            "known_brand": is_known_brand(mfr),
+            "agrees": explicit is None or explicit == derived,
+        })
+
+    if json_output:
+        typer.echo(json.dumps(rows, ensure_ascii=False, indent=2))
+        return
+
+    # Human-readable layout.
+    by_code: dict[str, list[dict[str, Any]]] = {
+        CAR_TYPE_DOMESTIC: [], CAR_TYPE_IMPORT: [], "?": [],
+    }
+    for r in rows:
+        code = r["car_type_code_yaml"] or "?"
+        by_code.setdefault(code, []).append(r)
+
+    typer.echo("=== models.yaml CarType classification audit ===")
+    typer.echo(f"models total            : {len(rows)}")
+    typer.echo(f"  domestic (Y in YAML)  : {len(by_code[CAR_TYPE_DOMESTIC])}")
+    typer.echo(f"  import   (N in YAML)  : {len(by_code[CAR_TYPE_IMPORT])}")
+    typer.echo(f"  no car_type_code set  : {len(by_code['?'])}")
+    typer.echo()
+
+    # Disagreements between explicit YAML value and the classifier's view.
+    disagreements = [r for r in rows if r["car_type_code_yaml"] is not None and not r["agrees"]]
+    if disagreements:
+        typer.echo(f"--- disagreements ({len(disagreements)}) ---")
+        for r in disagreements:
+            typer.echo(
+                f"  {r['slug']:<24}  mfr={r['manufacturer']!r:<14}  "
+                f"yaml={r['car_type_code_yaml']}  derived={r['car_type_code_derived']}"
+            )
+        typer.echo()
+
+    # Brands the classifier didn't know — defaulted to "N". These are the
+    # ones to either add to KNOWN_IMPORT_BRANDS or DOMESTIC_BRANDS_EN_TO_KR.
+    unknown = [r for r in rows if not r["known_brand"] and r["manufacturer"]]
+    if unknown:
+        typer.echo(f"--- unknown brands (defaulted to {CAR_TYPE_IMPORT}; ADD to classification map) ---")
+        # Group by manufacturer to keep the report compact.
+        by_mfr: dict[str, int] = {}
+        for r in unknown:
+            by_mfr[r["manufacturer"]] = by_mfr.get(r["manufacturer"], 0) + 1
+        for mfr, n in sorted(by_mfr.items()):
+            typer.echo(f"  {mfr!r:<20} ({n} model{'s' if n != 1 else ''})")
+        typer.echo()
+
+    # Per-manufacturer breakdown with explicit counts.
+    by_mfr: dict[str, dict[str, int]] = {}
+    for r in rows:
+        m = r["manufacturer"] or "<missing>"
+        by_mfr.setdefault(m, {"Y": 0, "N": 0, "total": 0})
+        code = r["car_type_code_yaml"] or "?"
+        if code in ("Y", "N"):
+            by_mfr[m][code] += 1
+        by_mfr[m]["total"] += 1
+        by_mfr[m]["known"] = int(r["known_brand"])
+
+    typer.echo("--- by manufacturer ---")
+    typer.echo(f"  {'manufacturer':<20} {'total':>5} {'Y':>4} {'N':>4}  known")
+    for mfr in sorted(by_mfr.keys(), key=lambda x: (-by_mfr[x]["total"], x)):
+        s = by_mfr[mfr]
+        typer.echo(
+            f"  {mfr:<20} {s['total']:>5} {s['Y']:>4} {s['N']:>4}  "
+            f"{'yes' if s.get('known') else 'NO (default)'}"
+        )
