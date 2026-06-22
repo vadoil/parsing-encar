@@ -1,3 +1,16 @@
-# Run encar parser daily at 03:00 (Korea time, UTC+9 → 18:00 UTC)
-# Adjust timezone of the host if needed
-0 3 * * * cd /app && uv run --no-sync python -m encar_parser run >> /var/log/encar.log 2>&1
+# Daily incremental parse at 03:00 (Korea time, UTC+9 → 18:00 UTC).
+# Adjust the timezone of the host if needed.
+#
+# Mode is INCREMENTAL — the parser stops at the first page whose newest
+# car was already seen within the cooldown window (default 12h). After a
+# full backfill, most runs process 0-200 cars and finish in <1 hour.
+#
+# NOT scheduled here:
+#   - ``backfill`` — manual only, resumable; run once after deploy to
+#     populate the catalog, then rely on ``run-incremental`` daily.
+#   - ``dedup`` — auto-runs at the end of every incremental pass.
+#   - ``plan``    — dry-run, run by hand to inspect the schedule.
+#
+# Disable on prod until the user has manually run one ``run-incremental``
+# and confirmed memory stays under the 1 GiB cap.
+0 3 * * * cd /app && uv run --no-sync python -m encar_parser run-incremental >> /var/log/encar-incremental.log 2>&1

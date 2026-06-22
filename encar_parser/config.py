@@ -41,6 +41,24 @@ class Settings(BaseSettings):
     max_pages: int = 200
     page_size: int = 20
 
+    # ── Scheduler (Phase 4) ────────────────────────────────────────────────
+    # Number of buckets in the rotation. The bucket chosen for today is
+    # ``(day_of_year - 1) % scheduler_bucket_count``. With 105 enabled
+    # models and bucket_count=14 the daily slice is ~7-8 models; with
+    # bucket_count=7 it is ~15. 14 is the safe default (daily work
+    # comfortably under 12h even on a full backfill).
+    scheduler_bucket_count: int = 14
+    # After parsing a model, leave it alone for this many hours regardless
+    # of which bucket today is. EncAr's "newest listings" window is ~24h;
+    # 12h keeps incremental runs cheap without missing freshly-listed cars.
+    scheduler_cooldown_hours: int = 12
+    # Path to the JSON state file used by ``backfill --resume``. Must be
+    # on a persistent volume (the parser container's ``/var/log`` is).
+    backfill_state_path: str = "/var/log/backfill_state.json"
+    # Path to the cached per-model Count used by ``plan`` dry-runs. Written
+    # by ``plan --probe`` (slow but accurate) and read by every later run.
+    plan_counts_cache: str = "/var/log/encar_counts.json"
+
     # ── Web viewer ────────────────────────────────────────────────────────
     # KRW → RUB rate used in the web table. 0.048 ≈ реальный курс начала
     # 2026. Позже заменим на ежедневную таблицу курсов; до тех пор это

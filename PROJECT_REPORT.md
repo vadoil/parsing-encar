@@ -635,6 +635,116 @@ SELECT is_primary, count(*) FROM cars GROUP BY is_primary;
 `alembic upgrade head` — миграция `0003_is_primary` добавляет колонку
 + partial index `idx_cars_is_primary`.
 
+### Расписание парсинга (Phase 4)
+
+Каталог ~105 моделей × ~469 машин в среднем = **~49 200 машин всего**;
+детали тянутся ~4 сек/машина. Полный обход ≈ 55 часов — за сутки никак.
+Поэтому планировщик делит каталог на ротацию и ходит по ней инкрементально.
+
+**Ротация:** все enabled-модели сортируются по `(priority, slug)` и
+делятся на N бакетов. Бакет на сегодня = `(day_of_year − 1) % N`.
+После полного backfill по умолчанию стоит N=14 (≈ 7-8 моделей в день,
+худший день ~7 ч, помещается в 12-часовой бюджет с большим запасом).
+
+**Cooldown:** даже если модель в сегодняшнем бакете, она пропускается,
+если `last_run_at` моложе `scheduler_cooldown_hours` (по умолчанию 12).
+Это защищает от повторного парсинга модели, которая только что отработала
+в соседнем бакете.
+
+**Anti-ban:**
+- `RandomDelay(2.0, 5.0)` сек между детальными запросами (settings)
+- `RandomDelay(5.0, 15.0)` сек между моделями
+- tenacity retry на 429/5xx (3 попытки с экспоненциальным backoff)
+- Если 4-секундный `per_car_sec` слишком быстрый — увеличить через
+  `settings.min_delay_sec`/`max_delay_sec` или env
+
+**Инкрементальный режим** (`run-incremental`): API отдаёт машины в
+порядке `ModifiedDate` (новые первые). Пайплайн идёт по страницам и
+останавливается, как только самый новый автомобиль на странице был
+уже виден в течение cooldown-окна. На хорошо обкатанной БД
+инкрементальный забег обрабатывает 0-200 машин и финиширует за <1 час.
+
+**Backfill** (`backfill`): полный обход всей ротации. Состояние
+сохраняется в `/var/log/backfill_state.json` (atomic write, version 1)
+после каждой модели — на рестарте/краше продолжает с места, а не с нуля.
+`--reset` стирает state и начинает сначала. Запускается только руками
+(НЕ в cron).
+
+**План / dry-run** (`plan`): без сети показывает, что будет парситься
+сегодня (или в произвольный день/диапазон), сколько машин, сколько
+времени при 4 сек/машина. С ключом `--probe` живо опрашивает Encar
+на Count (≈3 сек × 105 моделей ≈ 5 мин) и сохраняет кэш в
+`/var/log/encar_counts.json`. Без кэша считает по среднему (469).
+
+**Команды CLI:**
+
+```bash
+# План (быстрый, без сети — использует кэш /var/log/encar_counts.json)
+uv run encar-parser plan                          # сегодня, человекочитаемо
+uv run encar-parser plan --days 14                # полная 14-дневная ротация
+uv run encar-parser plan --json                   # JSON
+uv run encar-parser plan --probe                  # обновить кэш counts
+uv run encar-parser plan --day 2026-06-21         # конкретная дата
+
+# Backfill (ручной, resumable)
+uv run encar-parser backfill                      # с resume
+uv run encar-parser backfill --reset -y           # с нуля (destructive!)
+uv run encar-parser backfill --max-pages 5        # обрезать каждый model walk
+
+# Ежедневный инкремент (вызывается cron'ом в 03:00 KST)
+uv run encar-parser run-incremental
+uv run encar-parser run-incremental --cooldown-hours 6
+uv run encar-parser run-incremental --max-models 5 --max-pages 3   # тест
+```
+
+**Cron** (`docker/cron/crontab`):
+
+```
+0 3 * * * cd /app && uv run --no-sync python -m encar_parser run-incremental >> /var/log/encar-incremental.log 2>&1
+```
+
+Backfill в cron НЕ включён — это ручная операция.
+
+**Измеренные цифры (Phase 4 probe, 2026-06-21):**
+
+| Сценарий | Цифра |
+|----------|-------|
+| Всего моделей (enabled) | 105 |
+| Всего машин в каталоге | 49 217 |
+| Median машин/модель | 114 |
+| Top-1 (g80-rg3 / electrified-g80-rg3) | 3 362 каждый |
+| Top-15 суммарно | 28 665 (58% от всех) |
+| Полный обход @ 4 сек/машина | **~55 часов** |
+| 7-дневная ротация, худший день | 9.4 ч (тесно в сутках) |
+| **14-дневная ротация, худший день** | **6.87 ч** ✅ (с запасом) |
+| Инкремент на хорошо обкатанной БД | 0-200 машин/день, <1 ч |
+
+**Включение на проде (порядок строго соблюдать):**
+
+1. `rsync` + `alembic upgrade head` + `docker compose up -d --build web parser`
+   (Phase 2 + Phase 4 — `web` подхватит код планировщика, `parser` —
+   новый crontab).
+2. **`python -m encar_parser backfill --max-models 5 --max-pages 2`** —
+   ручной тест: 5 моделей, по 40 машин = 200 машин, ~15 мин. Смотреть
+   `docker stats parsingencar-parser-1` — RSS должен держаться 200-250 MiB
+   (как на Phase 3 verification), не расти линейно.
+3. Если ОК — **`python -m encar_parser backfill --yes`** — полный backfill,
+   resumable. На сервере 1042 строки → бэкфилл пройдёт по тем же моделям,
+   которые уже есть, частично skip'нет, частично дотянет свежие.
+4. После завершения backfill — **включить cron** (он уже прописан в
+   crontab, но `restart: on-failure:5` не даст контейнеру стартовать,
+   если entrypoint крашнется):
+   ```bash
+   # Проверить что cron внутри контейнера видит crontab:
+   ssh user@vps 'docker compose exec parser crontab -l'
+   # Триггернуть первый инкремент вручную:
+   ssh user@vps 'docker compose exec parser uv run --no-sync python -m encar_parser run-incremental'
+   # Смотреть /var/log/encar-incremental.log
+   ```
+5. **Проверка через неделю:** `python -m encar_parser plan` — что в
+   сегодняшнем бакете? Должны быть модели, которые еще не парсились
+   сегодня; ничего не должно валиться с OOM.
+
 ---
 
 ## 10. Известные баги, TODO, что не работает

@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import urllib.parse
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from encar_parser.db.models import SearchModel
+from encar_parser.db.models import Car, SearchModel
 from encar_parser.db.repository import link_car_to_model, upsert_car
 from encar_parser.fetchers.base import Fetcher
 from encar_parser.parsers.details import parse_car_detail
@@ -243,3 +244,151 @@ def _infer_page_size(items: list[Any], search_model: SearchModel) -> int:
     default. Callers can rely on Count-based stop instead.
     """
     return 20
+
+
+async def _seen_recently(
+    session: AsyncSession, encar_id: int, cooldown: timedelta
+) -> datetime | None:
+    """Return the car's last_seen_at if it was seen within ``cooldown``, else None.
+
+    A None ``last_seen_at`` (never parsed) is NOT recent — the incremental
+    walker treats that as "fresh, needs processing".
+    """
+    last_seen = await session.scalar(
+        select(Car.last_seen_at).where(Car.encar_id == encar_id)
+    )
+    if last_seen is None:
+        return None
+    now = datetime.now(UTC)
+    # Some DB drivers (sqlite) return naive datetimes even for tz-aware columns.
+    # Normalise so the comparison works regardless of driver behaviour.
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=UTC)
+    threshold = now - cooldown
+    return last_seen if last_seen >= threshold else None
+
+
+async def run_model_incremental(
+    search_model: SearchModel,
+    *,
+    fetcher: Fetcher,
+    session: AsyncSession,
+    list_url_for_page: Callable[[int], str],
+    detail_url_template: str,
+    request_delay: RandomDelay | None = None,
+    max_pages: int = 10,
+    cooldown_hours: int = 12,
+) -> int:
+    """Incremental walk: process pages, stop as soon as we hit known-recent cars.
+
+    The EncAr list API returns cars in ``ModifiedDate`` order (newest first).
+    The very first item on the very first page is therefore the most-recently
+    modified car in the model's slice. If we already saw it within
+    ``cooldown_hours``, the entire page (and every page after) is older than
+    what we have — so we stop without fetching the rest.
+
+    Each successful detail-fetch + upsert updates ``last_seen_at``, so a model
+    that's been idle for ``cooldown_hours`` picks up where it left off.
+
+    Returns the number of cars processed (typically 0 if everything is fresh).
+    """
+    request_delay = request_delay or RandomDelay(0.01, 0.05)
+    cooldown = timedelta(hours=cooldown_hours)
+    fetched = 0
+    total_collected = 0
+    total_reported: int | None = None
+    stopped_at_page: int | None = None
+
+    log.info(
+        "model_incremental_start",
+        slug=search_model.slug,
+        name=search_model.name,
+        cooldown_hours=cooldown_hours,
+        max_pages=max_pages,
+    )
+
+    for page in range(1, max_pages + 1):
+        url = list_url_for_page(page)
+        try:
+            items, count = await _fetch_list_with_meta(fetcher, url)
+        except Exception as e:
+            log.error("model_list_failed", slug=search_model.slug, page=page, error=str(e))
+            raise
+
+        if page == 1:
+            total_reported = count
+
+        log.info(
+            "model_page_ok",
+            slug=search_model.slug,
+            page=page,
+            items=len(items),
+            total_reported=total_reported,
+        )
+
+        if not items:
+            log.info("model_incremental_stop_empty", slug=search_model.slug, page=page)
+            stopped_at_page = page
+            break
+
+        # Stop condition: the newest item on the page was already seen recently.
+        # The list is sorted by ModifiedDate desc, so every later item is older.
+        last_seen = await _seen_recently(session, items[0].encar_id, cooldown)
+        if last_seen is not None:
+            log.info(
+                "model_incremental_stop_recent",
+                slug=search_model.slug,
+                page=page,
+                newest_encar_id=items[0].encar_id,
+                last_seen=last_seen.isoformat(),
+            )
+            stopped_at_page = page
+            break
+
+        total_collected += len(items)
+        fetched += await _process_items(
+            fetcher, session, search_model, items,
+            detail_url_template, request_delay,
+        )
+
+        # Stop conditions inherited from run_model:
+        if total_reported is not None and total_collected >= total_reported:
+            log.info(
+                "model_incremental_stop_count",
+                slug=search_model.slug,
+                total=total_collected,
+                reported=total_reported,
+            )
+            stopped_at_page = page
+            break
+        if len(items) < _infer_page_size(items, search_model):
+            log.info(
+                "model_incremental_stop_short_page",
+                slug=search_model.slug,
+                page=page,
+                got=len(items),
+            )
+            stopped_at_page = page
+            break
+    else:
+        log.warning(
+            "model_incremental_max_pages_hit",
+            slug=search_model.slug,
+            max_pages=max_pages,
+            total=total_collected,
+            reported=total_reported,
+        )
+
+    # Update last_run_at only if we actually processed something. Otherwise
+    # the cooldown filter would keep skipping the model even though we
+    # never did any work (e.g. off-hours, all-fresh, etc).
+    if fetched > 0:
+        search_model.last_run_at = datetime.now(UTC)
+        await session.commit()
+    log.info(
+        "model_incremental_done",
+        slug=search_model.slug,
+        fetched=fetched,
+        pages_visited=stopped_at_page or max_pages,
+    )
+    return fetched

@@ -62,6 +62,10 @@ services:
       WEB_WORKERS: "2"
     ports:
       - "127.0.0.1:8090:8090"
+    # Share the parser's /var/log volume so `plan --probe` results
+    # (cached counts) are visible from the web container too.
+    volumes:
+      - encar_logs:/var/log
     restart: unless-stopped
 
 volumes:
